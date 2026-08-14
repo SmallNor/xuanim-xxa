@@ -1,25 +1,51 @@
 {
   "expo": {
-    "name": "xxa",
-    "slug": "xxa",
+    "name": "喧喧",
+    "slug": "xuan-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-icon.png",
+    "extra": {
+      "xuanServer": "http://118.89.198.109:11443",
+      "xuanWebServer": "http://127.0.0.1:11443",
+      "showServerInput": false
+    },
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.xxa.xuanim",
+      "buildNumber": "1"
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#E7F3FF",
+        "foregroundImage": "./assets/app-icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.xxa.xuanim",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许喧喧访问相册，以便选择并发送图片。",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ]
   }
 }
