@@ -4,10 +4,14 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import type {XuanWorkbenchStats} from '../api/types';
 import {WecomSearchIcon} from './wecom-icons';
 import {
+    AiChatIcon, AiDocumentIcon, AiRobotIcon, AiServiceSummaryIcon, AiSpreadsheetIcon, AiSummaryIcon,
     BusinessCardIcon, ChooseAppsIcon, CustomerContactIcon, CustomerGroupIcon, CustomerMomentsIcon,
-    ExternalPaymentIcon, FindServiceIcon, LeadAssistantIcon, ManageEnterpriseIcon, MassSendIcon,
-    OfficeAssistantIcon, OfficeDataIcon, OfficeDocumentIcon, OfficeMoreIcon, PromoFeatureIcon,
-    PromoPlayIcon, ResignationTransferIcon, ServiceSummaryIcon, WechatServiceIcon,
+    EfficiencyCalendarIcon, EfficiencyCubeIcon, EfficiencyLiveIcon, EfficiencyPictureIcon,
+    ExternalPaymentIcon, FindServiceIcon, InternalAnnouncementIcon, InternalApprovalIcon,
+    InternalColleagueIcon, InternalHrIcon, InternalIndustryIcon, InternalLearningIcon, InternalLocationIcon,
+    InternalMeetingIcon, InternalMoreIcon, InternalPayrollIcon, InternalReportIcon, LeadAssistantIcon,
+    ManageEnterpriseIcon, MassSendIcon, PromoFeatureIcon, PromoPlayIcon, ResignationTransferIcon,
+    ServiceSummaryIcon, WechatServiceIcon,
     WorkbenchSettingsIcon,
 } from './workbench-icons';
 
@@ -36,10 +40,33 @@ const customerApps: AppItem[] = [
 ];
 
 const officeApps: AppItem[] = [
-    {label: '文档', icon: OfficeDocumentIcon},
-    {label: '智能助手', icon: OfficeAssistantIcon},
-    {label: '数据分析', icon: OfficeDataIcon},
-    {label: '更多应用', icon: OfficeMoreIcon},
+    {label: '智能文档', icon: AiDocumentIcon},
+    {label: '智能表格', icon: AiSpreadsheetIcon},
+    {label: '智能总结', icon: AiSummaryIcon},
+    {label: '智能机器人', icon: AiRobotIcon},
+    {label: '记录面聊', icon: AiChatIcon},
+    {label: '服务总结', icon: AiServiceSummaryIcon},
+];
+
+const internalApps: AppItem[] = [
+    {label: '打卡', icon: InternalLocationIcon},
+    {label: '审批', icon: InternalApprovalIcon},
+    {label: '汇报', icon: InternalReportIcon},
+    {label: '会议室', icon: InternalMeetingIcon},
+    {label: '公告', icon: InternalAnnouncementIcon},
+    {label: '工资条', icon: InternalPayrollIcon},
+    {label: '人事助手', icon: InternalHrIcon},
+    {label: '同事吧', icon: InternalColleagueIcon},
+    {label: '行业资讯', icon: InternalIndustryIcon},
+    {label: '学习园地', icon: InternalLearningIcon},
+    {label: '其他', icon: InternalMoreIcon},
+];
+
+const efficiencyApps: AppItem[] = [
+    {label: '日程', icon: EfficiencyCalendarIcon},
+    {label: '微盘', icon: EfficiencyPictureIcon},
+    {label: '直播', icon: EfficiencyLiveIcon},
+    {label: '文档空间', icon: EfficiencyCubeIcon},
 ];
 
 function AppGrid({items}: {items: AppItem[]}) {
@@ -180,15 +207,23 @@ export default function WorkbenchScreen({footer, stats}: {footer: ReactNode; sta
                 <Text style={styles.sectionTitle}>智能办公 AI+</Text>
                 <AppGrid items={officeApps} />
             </View>
+            <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>内部管理</Text>
+                <AppGrid items={internalApps} />
+            </View>
+            <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>效率工具</Text>
+                <AppGrid items={efficiencyApps} />
+            </View>
         </ScrollView>
         {footer}
     </View>;
 }
 
 const styles = StyleSheet.create({
-    screen: {flex: 1, backgroundColor: '#f1f4fa'},
-    headerSafe: {paddingTop: Platform.OS === 'web' ? 34 : 0, backgroundColor: '#e7f2ff'},
-    header: {height: 50, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e7f2ff'},
+    screen: {flex: 1, backgroundColor: '#f3f4f9'},
+    headerSafe: {paddingTop: Platform.OS === 'web' ? 34 : 0, backgroundColor: '#eaf2ff'},
+    header: {height: 50, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eaf2ff'},
     headerTitle: {color: '#0b0d10', fontSize: 22, fontWeight: '500', letterSpacing: 0},
     headerActions: {position: 'absolute', right: 12, bottom: 5, flexDirection: 'row', columnGap: 7},
     headerButton: {width: 39, height: 39, alignItems: 'center', justifyContent: 'center'},
@@ -221,7 +256,7 @@ const styles = StyleSheet.create({
     statsCard: {height: 148, marginTop: 12, paddingTop: 15, borderRadius: 18, backgroundColor: '#fff'},
     statsHeader: {height: 35, paddingHorizontal: 20, alignItems: 'center', flexDirection: 'row'},
     statsIcon: {width: 35, height: 35, alignItems: 'center', justifyContent: 'center'},
-    statsTitle: {marginLeft: 11, color: '#9b9b9f', fontSize: 18, fontWeight: '400'},
+    statsTitle: {marginLeft: 10, color: '#9b9b9f', fontSize: 16, lineHeight: 21, fontWeight: '400'},
     arrowText: {marginLeft: 'auto', color: '#d8d9dc', fontSize: 36, fontWeight: '200', lineHeight: 34},
     statsRow: {flex: 1, marginTop: 7, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center'},
     statItem: {flex: 1, alignItems: 'center', justifyContent: 'center'},
@@ -230,7 +265,7 @@ const styles = StyleSheet.create({
     statValueCompact: {fontSize: 12},
     statLabel: {marginTop: 7, color: '#9b9b9f', fontSize: 14, lineHeight: 20},
     sectionCard: {marginTop: 12, paddingTop: 17, paddingHorizontal: 20, paddingBottom: 14, borderRadius: 18, backgroundColor: '#fff'},
-    sectionTitle: {color: '#9b9b9f', fontSize: 17, lineHeight: 24, fontWeight: '400'},
+    sectionTitle: {color: '#9b9b9f', fontSize: 15, lineHeight: 21, fontWeight: '400'},
     grid: {marginTop: 9, flexDirection: 'row', flexWrap: 'wrap'},
     gridItem: {width: '25%', minHeight: 88, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 10},
     gridIcon: {width: 48, height: 48, alignItems: 'center', justifyContent: 'center'},

@@ -3,6 +3,7 @@ import {
     ActivityIndicator, Alert, BackHandler, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform,
     Pressable, RefreshControl, StyleSheet, Text, TextInput, View,
 } from 'react-native';
+import {StatusBar} from 'expo-status-bar';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -50,6 +51,9 @@ const getTimestamp = (value?: number) => value && value < 1_000_000_000_000 ? va
 const configuredXuanServer = Platform.OS === 'web'
     ? appConfig.expo.extra.xuanWebServer
     : appConfig.expo.extra.xuanServer;
+
+const workbenchPreview = __DEV__ && Platform.OS === 'web' &&
+    typeof window !== 'undefined' && window.location.search.includes('workbenchPreview=1');
 
 const formatListTime = (value?: number) => {
     const timestamp = getTimestamp(value);
@@ -138,8 +142,8 @@ function LoginScreen({onLogin, initialAccount}: {onLogin: (server: string, accou
     return <KeyboardAvoidingView style={styles.loginScreen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <SafeAreaView style={styles.loginSafe}>
             <View style={styles.loginBrand}>
-                <Image source={require('../../assets/xuan-icon.png')} style={styles.loginLogo} />
-                <Text style={styles.loginTitle}>喧喧</Text>
+                <Image source={require('../../assets/wecom-icon.png')} style={styles.loginLogo} />
+                <Text style={styles.loginTitle}>企业微信</Text>
             </View>
             <View style={styles.loginForm}>
                 {appConfig.expo.extra.showServerInput &&
@@ -350,9 +354,9 @@ const fitMessageImage = (width: number, height: number) => {
     return {width: Math.round(width * scale), height: Math.round(height * scale)};
 };
 
-function ChatMessageRow({message, image, own, showTime, ownAvatar, peerAvatar, ownName, peerName, showSenderName}: {
+function ChatMessageRow({message, image, own, showTime, ownAvatar, peerAvatar, ownName, peerName, showSenderName, onImagePress}: {
     message: XuanMessage; image?: {uri: string; width: number; height: number}; own: boolean; showTime: boolean; ownAvatar?: string; peerAvatar?: string;
-    ownName: string; peerName: string; showSenderName: boolean;
+    ownName: string; peerName: string; showSenderName: boolean; onImagePress: (image: {uri: string; width: number; height: number}) => void;
 }) {
     const [imageFailed, setImageFailed] = useState(false);
     const senderName = peerName;
@@ -368,7 +372,9 @@ function ChatMessageRow({message, image, own, showTime, ownAvatar, peerAvatar, o
                     {!visibleImage && <View style={[styles.messageTail, own ? styles.messageTailOwn : styles.messageTailOther]} />}
                     <View style={[styles.messageBubble, own ? styles.messageBubbleOwn : styles.messageBubbleOther, visibleImage && styles.messageImageBubble]}>
                         {visibleImage
-                            ? <Image source={{uri: visibleImage.uri}} style={[styles.messageImage, imageSize]} resizeMode="contain" onError={() => setImageFailed(true)} accessibilityLabel="图片消息" />
+                            ? <Pressable onPress={() => onImagePress(visibleImage)} accessibilityRole="button" accessibilityLabel="查看大图">
+                                <Image source={{uri: visibleImage.uri}} style={[styles.messageImage, imageSize]} resizeMode="contain" onError={() => setImageFailed(true)} accessibilityLabel="图片消息" />
+                            </Pressable>
                             : <Text selectable style={styles.messageText}>{chatMessageText(message)}</Text>}
                     </View>
                 </View>
@@ -385,6 +391,7 @@ function ChatScreen({chat, client, session, messages, chatMembers, loading, erro
     const [content, setContent] = useState('');
     const [composerFocused, setComposerFocused] = useState(false);
     const [attachmentOpen, setAttachmentOpen] = useState(false);
+    const [previewImage, setPreviewImage] = useState<{uri: string; width: number; height: number} | null>(null);
     const listRef = useRef<FlatList<XuanMessage>>(null);
     const ownAvatar = client.resolveAsset(session.user.avatar);
     const peerAvatar = client.resolveAsset(chat.avatar);
@@ -449,11 +456,27 @@ function ChatScreen({chat, client, session, messages, chatMembers, loading, erro
                             ownName={ownName}
                             peerName={isGroup ? sender?.realname || sender?.account || `\u7528\u6237 ${item.user}` : peerName}
                             showSenderName={isGroup}
+                            onImagePress={setPreviewImage}
                         />;
                     }}
                     contentContainerStyle={[styles.messagesList, !messages.length && styles.emptyList]}
                     onContentSizeChange={() => messages.length && listRef.current?.scrollToEnd({animated: false})}
                 />}
+        <Modal
+            visible={!!previewImage}
+            transparent
+            animationType="fade"
+            statusBarTranslucent
+            onRequestClose={() => setPreviewImage(null)}
+        >
+            <View style={styles.imageViewer}>
+                <StatusBar style="light" />
+                <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreviewImage(null)} accessibilityLabel="关闭大图" />
+                {previewImage && <Pressable style={styles.imageViewerContent} onPress={(event) => event.stopPropagation()} accessibilityRole="image" accessibilityLabel="图片大图">
+                    <Image source={{uri: previewImage.uri}} style={styles.imageViewerImage} resizeMode="contain" />
+                </Pressable>}
+            </View>
+        </Modal>
         <SafeAreaView edges={['bottom']} style={styles.composerSafe}>
             <View style={[styles.composer, hasContent && styles.composerSending]}>
                 <View style={[styles.composerIcon, styles.composerVoiceIcon]}><WecomChatVoiceIcon /></View>
@@ -708,6 +731,12 @@ export default function XuanApp() {
         }
     };
 
+    if (workbenchPreview) {
+        return <WorkbenchScreen
+            stats={DEFAULT_WORKBENCH_STATS}
+            footer={<BottomNav active="work" unreadCount={0} contactsCount={1} onChange={() => {}} />}
+        />;
+    }
     if (!client || !session) return <LoginScreen onLogin={handleLogin} initialAccount={lastLogin?.account} />;
     if (accountOpen) {
         return <AccountScreen
@@ -921,6 +950,9 @@ const styles = StyleSheet.create({
     messageText: {color: '#111418', fontSize: 16, lineHeight: 24},
     messageImageBubble: {paddingHorizontal: 0, paddingVertical: 0, overflow: 'hidden', backgroundColor: 'transparent'},
     messageImage: {borderRadius: 6, backgroundColor: '#dfe2e6'},
+    imageViewer: {flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.92)'},
+    imageViewerContent: {width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center'},
+    imageViewerImage: {width: '100%', height: '100%'},
     composerSafe: {borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#dedfe3', backgroundColor: '#f5f6f8'},
     composer: {minHeight: 43, paddingTop: 8, paddingRight: 3, paddingBottom: 1, flexDirection: 'row', alignItems: 'flex-end', columnGap: 1},
     composerSending: {paddingRight: 9},

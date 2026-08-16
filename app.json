@@ -1,10 +1,15 @@
 {
   "expo": {
-    "name": "喧喧",
+    "name": "企业微信",
     "slug": "xuan-mobile",
-    "version": "1.0.0",
+    "version": "1.0.5",
     "orientation": "portrait",
-    "icon": "./assets/app-icon.png",
+    "icon": "./assets/wecom-icon.png",
+    "splash": {
+      "image": "./assets/wecom-splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F7FAF8"
+    },
     "extra": {
       "xuanServer": "http://118.89.198.109:11443",
       "xuanWebServer": "http://127.0.0.1:11443",
@@ -18,16 +23,12 @@
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
-      "adaptiveIcon": {
-        "backgroundColor": "#E7F3FF",
-        "foregroundImage": "./assets/app-icon.png"
-      },
       "predictiveBackGestureEnabled": false,
       "package": "com.xxa.xuanim",
-      "versionCode": 1
+      "versionCode": 6
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/wecom-favicon.png"
     },
     "plugins": [
       [
@@ -41,7 +42,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "允许喧喧访问相册，以便选择并发送图片。",
+          "photosPermission": "允许企业微信访问相册，以便选择并发送图片。",
           "cameraPermission": false,
           "microphonePermission": false
         }

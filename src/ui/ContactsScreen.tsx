@@ -7,11 +7,10 @@ import {
     ChevronLeft, ChevronRight, RefreshCw, Search, UserRound, X,
 } from 'lucide-react-native';
 import {XuanClient, XuanDepartment, XuanMember} from '../api/xuan';
+import {ContactsAddCustomerIcon, ContactsCustomerIcon} from './workbench-icons';
 
 const contactIcons = {
     robot: require('../../assets/icons/contacts-robot.png'),
-    customer: require('../../assets/icons/contacts-customer.png'),
-    addCustomer: require('../../assets/icons/contacts-add-customer.png'),
     directory: require('../../assets/icons/contacts-directory.png'),
     invite: require('../../assets/icons/contacts-invite.png'),
     headerSearch: require('../../assets/icons/contacts-header-search.png'),
@@ -144,11 +143,11 @@ export default function ContactsScreen({
             </Pressable>
             <View style={styles.sectionLabel}><Text style={styles.sectionLabelText}>我的客户</Text></View>
             <Pressable style={({pressed}) => [styles.actionRow, pressed && styles.rowPressed]} onPress={() => showUnavailable('当前系统暂未接入客户管理功能')}>
-                <ReferenceIcon source={contactIcons.customer} size={36} />
+                <ContactsCustomerIcon size={36} />
                 <View style={styles.actionBody}><Text style={styles.actionLabel}>我的客户</Text><ChevronRight size={19} color="#b5b9be" /></View>
             </Pressable>
             <Pressable style={({pressed}) => [styles.actionRow, pressed && styles.rowPressed]} onPress={() => showUnavailable('请在管理平台中添加客户')}>
-                <ReferenceIcon source={contactIcons.addCustomer} size={36} />
+                <ContactsAddCustomerIcon size={36} />
                 <View style={styles.actionBody}><Text style={styles.actionLabel}>添加客户</Text><ChevronRight size={19} color="#b5b9be" /></View>
             </Pressable>
             <View style={styles.sectionLabel}><Text style={styles.sectionLabelText}>企业通讯录</Text></View>

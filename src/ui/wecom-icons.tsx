@@ -1,5 +1,4 @@
 import {Image, ImageSourcePropType} from 'react-native';
-import {MessageCircle} from 'lucide-react-native';
 import Svg, {Circle, Path, Rect} from 'react-native-svg';
 
 type IconProps = {
@@ -17,10 +16,8 @@ const icons = {
     quickCalendar: require('../../assets/icons/quick-calendar.png'),
     quickTodo: require('../../assets/icons/quick-todo.png'),
     quickMeeting: require('../../assets/icons/quick-meeting.png'),
-    message: require('../../assets/icons/nav-message.png'),
     mail: require('../../assets/icons/nav-mail.png'),
     docs: require('../../assets/icons/nav-docs.png'),
-    work: require('../../assets/icons/nav-work.png'),
     contacts: require('../../assets/icons/nav-contacts.png'),
     chatBack: require('../../assets/icons/chat-back.png'),
     chatSparkle: require('../../assets/icons/chat-sparkle.png'),
@@ -67,10 +64,17 @@ export function MeetingIcon({size = 23, color = '#62686f'}: IconProps) {
     return <RasterIcon source={icons.quickMeeting} size={size} color={color} />;
 }
 
-export function WecomMessageIcon({size = 28, color = '#62686e', strokeWidth = 2, active = false}: IconProps) {
-    return active
-        ? <RasterIcon source={icons.message} size={size} color={color} />
-        : <MessageCircle size={size} color={color} strokeWidth={strokeWidth} />;
+export function WecomMessageIcon({size = 28, color = '#62686e', strokeWidth = 2}: IconProps) {
+    return <Svg width={size} height={size} viewBox="0 0 32 32">
+        <Path
+            d="M28 15.4c0 6.4-5.3 11.3-12.1 11.3-1.9 0-3.7-.4-5.3-1.1L4.3 28.3l1.8-5.9a10.7 10.7 0 0 1-2.2-7C3.9 9 9.1 4.2 15.9 4.2S28 9 28 15.4z"
+            fill="none"
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </Svg>;
 }
 
 export function WecomMailIcon({size = 28, color = '#62686e'}: IconProps) {
@@ -82,7 +86,12 @@ export function WecomDocsIcon({size = 28, color = '#62686e'}: IconProps) {
 }
 
 export function WecomWorkbenchIcon({size = 28, color = '#62686e'}: IconProps) {
-    return <RasterIcon source={icons.work} size={size} color={color} />;
+    return <Svg width={size} height={size} viewBox="0 0 32 32">
+        <Rect x="5" y="5" width="8.2" height="8.2" rx="2" fill="none" stroke={color} strokeWidth="2.1" />
+        <Rect x="18.8" y="5" width="8.2" height="8.2" rx="2" fill="none" stroke={color} strokeWidth="2.1" />
+        <Rect x="5" y="18.8" width="8.2" height="8.2" rx="2" fill="none" stroke={color} strokeWidth="2.1" />
+        <Rect x="18.8" y="18.8" width="8.2" height="8.2" rx="2" fill="none" stroke={color} strokeWidth="2.1" />
+    </Svg>;
 }
 
 export function WecomContactsIcon({size = 28, color = '#62686e'}: IconProps) {
