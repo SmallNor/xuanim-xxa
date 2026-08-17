@@ -126,3 +126,10 @@ export type XuanWorkbenchStats = {
     todayNewCustomers: number;
     todayPayment: number;
 };
+
+export type XuanCustomerContactData = XuanWorkbenchStats & {
+    externalContactScale: number;
+    businessCategory: string;
+    weeklyOnlineRevenue: number;
+    weeklyOfflineRevenue: number;
+};

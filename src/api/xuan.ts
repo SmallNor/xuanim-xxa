@@ -2,7 +2,7 @@ import AES from 'aes-js';
 import {File as ExpoFile} from 'expo-file-system';
 import md5 from 'md5';
 import JSONOptimizer from './json-optimizer';
-import {XuanAvatarUpload, XuanChat, XuanDepartment, XuanMember, XuanMessage, XuanPacket, XuanProfileUpdate, XuanServerInfo, XuanSession, XuanWorkbenchStats} from './types';
+import {XuanAvatarUpload, XuanChat, XuanCustomerContactData, XuanDepartment, XuanMember, XuanMessage, XuanPacket, XuanProfileUpdate, XuanServerInfo, XuanSession, XuanWorkbenchStats} from './types';
 
 const CLIENT_VERSION = '10.4';
 const REQUEST_TIMEOUT = 15000;
@@ -14,6 +14,16 @@ export const DEFAULT_WORKBENCH_STATS: XuanWorkbenchStats = {
     todayNewCustomers: 0,
     todayPayment: 0,
 };
+
+export const DEFAULT_CUSTOMER_CONTACT_DATA: XuanCustomerContactData = {
+    ...DEFAULT_WORKBENCH_STATS,
+    externalContactScale: 2000,
+    businessCategory: '\u672a\u77e5',
+    weeklyOnlineRevenue: 0,
+    weeklyOfflineRevenue: 0,
+};
+
+const CUSTOMER_CONTACT_SETTINGS_KEY = 'xxaCustomerContact';
 
 const normalizeWorkbenchStats = (value: unknown): XuanWorkbenchStats => {
     const stats = value && typeof value === 'object' ? value as Partial<XuanWorkbenchStats> : {};
@@ -28,6 +38,35 @@ const normalizeWorkbenchStats = (value: unknown): XuanWorkbenchStats => {
         todayPayment: Number.isFinite(payment) && payment >= 0 && payment <= 999999999999.99
             ? Math.round(payment * 100) / 100
             : DEFAULT_WORKBENCH_STATS.todayPayment,
+    };
+};
+
+export const normalizeCustomerContactData = (
+    value: unknown,
+    fallbackStats: XuanWorkbenchStats = DEFAULT_WORKBENCH_STATS,
+): XuanCustomerContactData => {
+    const data = value && typeof value === 'object' ? value as Partial<XuanCustomerContactData> : {};
+    const count = (input: unknown, fallback: number) => {
+        const parsed = Number(input);
+        return Number.isInteger(parsed) && parsed >= 0 && parsed <= 999999999 ? parsed : fallback;
+    };
+    const amount = (input: unknown, fallback: number) => {
+        const parsed = Number(input);
+        return Number.isFinite(parsed) && parsed >= 0 && parsed <= 999999999999.99
+            ? Math.round(parsed * 100) / 100
+            : fallback;
+    };
+    const businessCategory = typeof data.businessCategory === 'string'
+        ? data.businessCategory.trim().slice(0, 30)
+        : '';
+    return {
+        externalContactScale: count(data.externalContactScale, DEFAULT_CUSTOMER_CONTACT_DATA.externalContactScale),
+        businessCategory: businessCategory || DEFAULT_CUSTOMER_CONTACT_DATA.businessCategory,
+        customerTotal: count(data.customerTotal, fallbackStats.customerTotal),
+        todayNewCustomers: count(data.todayNewCustomers, fallbackStats.todayNewCustomers),
+        todayPayment: amount(data.todayPayment, fallbackStats.todayPayment),
+        weeklyOnlineRevenue: amount(data.weeklyOnlineRevenue, DEFAULT_CUSTOMER_CONTACT_DATA.weeklyOnlineRevenue),
+        weeklyOfflineRevenue: amount(data.weeklyOfflineRevenue, DEFAULT_CUSTOMER_CONTACT_DATA.weeklyOfflineRevenue),
     };
 };
 
@@ -433,6 +472,10 @@ export class XuanClient {
         });
     }
 
+    async deleteChat(cgid: string): Promise<void> {
+        await this.request('chatFreeze', [true, cgid]);
+    }
+
     async getMembers(memberIDs: number[] = []): Promise<XuanMember[]> {
         const members = await this.request<XuanMember[]>('userGetList', [memberIDs]);
         return (Array.isArray(members) ? members : []).map(normalizeMember);
@@ -502,6 +545,18 @@ export class XuanClient {
             throw new Error(result.message || '工作台数据获取失败');
         }
         return normalizeWorkbenchStats(result.data);
+    }
+
+    async getCustomerContactData(fallbackStats: XuanWorkbenchStats): Promise<XuanCustomerContactData | null> {
+        const settings = await this.request<Record<string, unknown>>('userSyncSettings', ['', [CUSTOMER_CONTACT_SETTINGS_KEY]]);
+        const data = settings?.[CUSTOMER_CONTACT_SETTINGS_KEY];
+        return data && typeof data === 'object' ? normalizeCustomerContactData(data, fallbackStats) : null;
+    }
+
+    async saveCustomerContactData(data: XuanCustomerContactData): Promise<XuanCustomerContactData> {
+        const normalized = normalizeCustomerContactData(data, data);
+        await this.request('userSyncSettings', ['', {[CUSTOMER_CONTACT_SETTINGS_KEY]: normalized}]);
+        return normalized;
     }
 
     async getDirectChat(member: XuanMember): Promise<XuanChat> {
@@ -854,4 +909,4 @@ export async function loginXuan(serverInput: string, accountInput: string, passw
 }
 
 export {normalizeMessages};
-export type {XuanAvatarUpload, XuanChat, XuanDepartment, XuanMember, XuanMessage, XuanPacket, XuanProfileUpdate, XuanSession, XuanWorkbenchStats};
+export type {XuanAvatarUpload, XuanChat, XuanCustomerContactData, XuanDepartment, XuanMember, XuanMessage, XuanPacket, XuanProfileUpdate, XuanSession, XuanWorkbenchStats};

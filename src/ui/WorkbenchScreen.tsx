@@ -121,30 +121,41 @@ function PromoBanner() {
                 <Text style={styles.watchButtonText}>观看讲解</Text>
             </View>
         </View>
-        <View style={styles.promoPreview}>
-            <View style={styles.previewTopLine}>
-                <View style={styles.previewDot} />
-                <Text style={styles.previewTitle}>服务总结 AI+</Text>
-                <View style={styles.previewChevron} />
+        <View style={styles.promoArt}>
+            <View style={styles.previewBackdrop}>
+                <View style={styles.previewBackdropAvatar} />
+                <View style={styles.previewBackdropLine} />
             </View>
-            <View style={styles.previewSheet}>
-                <View style={styles.previewUserLine}>
-                    <View style={styles.previewAvatar} />
-                    <Text style={styles.previewUser}>李至之</Text>
-                    <Text style={styles.previewTag}>微信</Text>
+            <View style={styles.previewDecoration}>
+                <View style={styles.previewDecorationDot} />
+                <View style={styles.previewDecorationBar} />
+                <View style={styles.previewDecorationDiamond} />
+            </View>
+            <View style={styles.promoPreview}>
+                <View style={styles.previewTopLine}>
+                    <View style={styles.previewDot} />
+                    <Text style={styles.previewTitle}>服务总结 AI+</Text>
                 </View>
-                <Text style={styles.previewLabel}>客户需求</Text>
-                <Text numberOfLines={1} style={styles.previewText}>7座SUV，纵向长续航版</Text>
-                <Text style={styles.previewLabel}>客户意向</Text>
-                <Text numberOfLines={1} style={styles.previewText}>高</Text>
-                <Text style={styles.previewLabel}>跟进建议</Text>
-                <Text numberOfLines={2} style={styles.previewText}>建议优先跟客户沟通，了解未定</Text>
+                <View style={styles.previewSheet}>
+                    <View style={styles.previewUserLine}>
+                        <View style={styles.previewAvatar} />
+                        <Text style={styles.previewUser}>李至之</Text>
+                        <Text style={styles.previewTag}>微信</Text>
+                    </View>
+                    <Text style={styles.previewLabel}>客户需求</Text>
+                    <Text numberOfLines={1} style={styles.previewText}>7座SUV，纵向长续航版</Text>
+                    <Text style={styles.previewLabel}>客户意向</Text>
+                    <Text numberOfLines={1} style={styles.previewText}>高</Text>
+                    <Text style={styles.previewLabel}>跟进建议</Text>
+                    <Text numberOfLines={2} style={styles.previewText}>建议优先跟客户沟通，了解未定</Text>
+                </View>
             </View>
         </View>
+        <View style={styles.promoChevron} />
     </Pressable>;
 }
 
-function ContactStatsCard({stats}: {stats: XuanWorkbenchStats}) {
+function ContactStatsCard({stats, onPress}: {stats: XuanWorkbenchStats; onPress: () => void}) {
     const customerTotal = String(stats.customerTotal);
     const todayNewCustomers = String(stats.todayNewCustomers);
     const todayPayment = `¥${stats.todayPayment.toFixed(2)}`;
@@ -155,6 +166,7 @@ function ContactStatsCard({stats}: {stats: XuanWorkbenchStats}) {
     return <Pressable
         accessibilityRole="button"
         accessibilityLabel="客户联系"
+        onPress={onPress}
         style={({pressed}) => [styles.statsCard, pressed && styles.pressed]}
     >
         <View style={styles.statsHeader}>
@@ -179,7 +191,11 @@ function ContactStatsCard({stats}: {stats: XuanWorkbenchStats}) {
     </Pressable>;
 }
 
-export default function WorkbenchScreen({footer, stats}: {footer: ReactNode; stats: XuanWorkbenchStats}) {
+export default function WorkbenchScreen({footer, stats, openCustomerContact}: {
+    footer: ReactNode;
+    stats: XuanWorkbenchStats;
+    openCustomerContact: () => void;
+}) {
     return <View style={styles.screen}>
         <WorkbenchHeader />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -198,7 +214,7 @@ export default function WorkbenchScreen({footer, stats}: {footer: ReactNode; sta
                 })}
             </View>
             <PromoBanner />
-            <ContactStatsCard stats={stats} />
+            <ContactStatsCard stats={stats} onPress={openCustomerContact} />
             <View style={styles.sectionCard}>
                 <Text style={styles.sectionTitle}>客户联系与管理</Text>
                 <AppGrid items={customerApps} />
@@ -232,27 +248,35 @@ const styles = StyleSheet.create({
     quickItem: {minHeight: 104, flex: 1, alignItems: 'center', justifyContent: 'center', rowGap: 13},
     quickIcon: {width: 38, height: 38, alignItems: 'center', justifyContent: 'center'},
     quickLabel: {color: '#121212', fontSize: 16, lineHeight: 22, fontWeight: '400'},
-    promoCard: {height: 130, marginTop: 12, paddingLeft: 20, borderRadius: 17, overflow: 'hidden', flexDirection: 'row', backgroundColor: '#e6f2ff'},
-    promoCopy: {minWidth: 0, flex: 1, paddingTop: 11, paddingRight: 8},
+    promoCard: {height: 130, marginTop: 14, paddingLeft: 20, borderRadius: 17, overflow: 'hidden', flexDirection: 'row', backgroundColor: '#e6f2ff'},
+    promoCopy: {minWidth: 0, flex: 1, paddingTop: 13},
     promoEyebrow: {flexDirection: 'row', alignItems: 'center', columnGap: 7},
     promoEyebrowText: {color: '#1ab760', fontSize: 15, fontWeight: '700'},
     promoTitle: {marginTop: 4, color: '#2777d9', fontSize: 15, lineHeight: 19, fontWeight: '700'},
     promoSubTitleRow: {marginTop: 2, alignItems: 'center', flexDirection: 'row', columnGap: 5},
     promoSubTitle: {color: '#347ed7', fontSize: 11, lineHeight: 16},
-    watchButton: {height: 23, marginTop: 2, paddingHorizontal: 7, alignSelf: 'flex-start', alignItems: 'center', flexDirection: 'row', columnGap: 4, borderRadius: 6, backgroundColor: '#fff'},
-    watchButtonText: {color: '#3175cf', fontSize: 11, fontWeight: '500'},
-    promoPreview: {width: '43%', marginTop: 13, marginRight: -11, paddingTop: 10, paddingHorizontal: 10, borderTopLeftRadius: 18, borderTopRightRadius: 18, backgroundColor: 'rgba(255,255,255,0.72)', transform: [{rotate: '-1deg'}]},
-    previewTopLine: {height: 20, flexDirection: 'row', alignItems: 'center', columnGap: 4},
-    previewDot: {width: 9, height: 9, borderRadius: 5, backgroundColor: '#37c68b'},
-    previewTitle: {color: '#5c9be8', fontSize: 10, fontWeight: '700'},
-    previewChevron: {marginLeft: 'auto', width: 9, height: 9, borderRightWidth: 2, borderBottomWidth: 2, borderColor: '#7c8790', transform: [{rotate: '45deg'}, {translateY: -2}]},
-    previewSheet: {flex: 1, marginTop: 5, padding: 8, borderTopLeftRadius: 10, borderTopRightRadius: 10, backgroundColor: '#fff'},
+    watchButton: {height: 21, marginTop: 2, paddingHorizontal: 5, alignSelf: 'flex-start', alignItems: 'center', flexDirection: 'row', columnGap: 2, borderRadius: 6, backgroundColor: '#fff'},
+    watchButtonText: {color: '#3175cf', fontSize: 10, fontWeight: '500'},
+    promoArt: {width: '43%', height: '100%', position: 'relative'},
+    previewBackdrop: {position: 'absolute', left: -8, top: 31, width: '48%', height: 99, paddingTop: 16, paddingHorizontal: 8, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundColor: 'rgba(255,255,255,0.43)'},
+    previewBackdropAvatar: {width: 12, height: 12, borderRadius: 3, backgroundColor: 'rgba(120,180,244,0.58)'},
+    previewBackdropLine: {width: 38, height: 4, marginTop: 8, borderRadius: 2, backgroundColor: 'rgba(135,185,239,0.25)'},
+    previewDecoration: {position: 'absolute', left: -27, bottom: 23, width: 22, height: 35},
+    previewDecorationDot: {position: 'absolute', top: 0, right: 0, width: 7, height: 7, borderRadius: 4, backgroundColor: '#67d5dd'},
+    previewDecorationBar: {position: 'absolute', left: 0, top: 16, width: 20, height: 6, borderRadius: 3, backgroundColor: '#72c7ed', transform: [{rotate: '-27deg'}]},
+    previewDecorationDiamond: {position: 'absolute', right: 0, bottom: 0, width: 7, height: 7, backgroundColor: '#f7ad19', transform: [{rotate: '45deg'}]},
+    promoPreview: {position: 'absolute', top: 9, right: 22, width: '72%', height: 125, paddingTop: 7, paddingHorizontal: 8, borderTopLeftRadius: 17, borderTopRightRadius: 17, backgroundColor: 'rgba(255,255,255,0.78)', transform: [{rotate: '-1deg'}]},
+    promoChevron: {position: 'absolute', top: 14, right: 13, width: 9, height: 9, borderRightWidth: 2, borderBottomWidth: 2, borderColor: '#66727e', transform: [{rotate: '45deg'}]},
+    previewTopLine: {height: 14, flexDirection: 'row', alignItems: 'center', columnGap: 3},
+    previewDot: {width: 7, height: 7, borderRadius: 4, backgroundColor: '#37c68b'},
+    previewTitle: {color: '#5c9be8', fontSize: 7, fontWeight: '700'},
+    previewSheet: {flex: 1, marginTop: 3, padding: 6, borderTopLeftRadius: 8, borderTopRightRadius: 8, backgroundColor: '#fff'},
     previewUserLine: {flexDirection: 'row', alignItems: 'center', columnGap: 4},
-    previewAvatar: {width: 13, height: 13, borderRadius: 4, backgroundColor: '#86b8f5'},
-    previewUser: {color: '#69a5e7', fontSize: 9, fontWeight: '600'},
-    previewTag: {color: '#49bf83', fontSize: 8},
-    previewLabel: {marginTop: 5, color: '#b5c1cf', fontSize: 8},
-    previewText: {marginTop: 2, color: '#7990a4', fontSize: 8, lineHeight: 11},
+    previewAvatar: {width: 10, height: 10, borderRadius: 3, backgroundColor: '#86b8f5'},
+    previewUser: {color: '#69a5e7', fontSize: 7, fontWeight: '600'},
+    previewTag: {color: '#49bf83', fontSize: 6},
+    previewLabel: {marginTop: 3, color: '#b5c1cf', fontSize: 6},
+    previewText: {marginTop: 1, color: '#7990a4', fontSize: 6, lineHeight: 8},
     statsCard: {height: 148, marginTop: 12, paddingTop: 15, borderRadius: 18, backgroundColor: '#fff'},
     statsHeader: {height: 35, paddingHorizontal: 20, alignItems: 'center', flexDirection: 'row'},
     statsIcon: {width: 35, height: 35, alignItems: 'center', justifyContent: 'center'},

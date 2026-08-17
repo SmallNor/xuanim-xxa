@@ -11,11 +11,13 @@ import {
     MessagesSquare, RefreshCw, ScanLine, Search, Server, Sparkles, UserRound, X,
 } from 'lucide-react-native';
 import appConfig from '../../app.json';
-import {DEFAULT_WORKBENCH_STATS, loginXuan, normalizeMessages, XuanChat, XuanClient, XuanDepartment, XuanImageAsset, XuanMember, XuanMessage, XuanSession, XuanWorkbenchStats} from '../api/xuan';
+import {DEFAULT_CUSTOMER_CONTACT_DATA, DEFAULT_WORKBENCH_STATS, loginXuan, normalizeMessages, XuanChat, XuanClient, XuanCustomerContactData, XuanDepartment, XuanImageAsset, XuanMember, XuanMessage, XuanSession, XuanWorkbenchStats} from '../api/xuan';
 import AccountScreen from './AccountScreen';
 import ContactsScreen from './ContactsScreen';
+import CustomerContactScreen from './CustomerContactScreen';
 import MemberProfileScreen from './MemberProfileScreen';
 import WorkbenchScreen from './WorkbenchScreen';
+import {getCustomerContactDataCache, saveCustomerContactDataCache} from '../storage/workbenchStats';
 import {
     AttachmentCalendarIcon, AttachmentCallIcon, AttachmentCameraIcon, AttachmentDocumentIcon,
     AttachmentFavoriteIcon, AttachmentImageIcon, AttachmentMeetingIcon, AttachmentRedPacketIcon,
@@ -54,6 +56,8 @@ const configuredXuanServer = Platform.OS === 'web'
 
 const workbenchPreview = __DEV__ && Platform.OS === 'web' &&
     typeof window !== 'undefined' && window.location.search.includes('workbenchPreview=1');
+const customerContactPreview = __DEV__ && Platform.OS === 'web' &&
+    typeof window !== 'undefined' && window.location.search.includes('customerContactPreview=1');
 
 const formatListTime = (value?: number) => {
     const timestamp = getTimestamp(value);
@@ -117,6 +121,8 @@ const getUnreadCount = (chat: XuanChat) => {
     const lastReadMessageIndex = chat.lastReadMessageIndex || 0;
     return Number.isInteger(lastMessageIndex) && Number.isInteger(lastReadMessageIndex) ? Math.max(0, lastMessageIndex - lastReadMessageIndex) : 0;
 };
+
+const isProtectedDefaultChat = (chat: XuanChat) => chat.type === 'system' || chat.type === 'bot' || chat.name?.trim() === '小喧喧' || chat.gid.includes('&xuanbot');
 
 function LoginScreen({onLogin, initialAccount}: {onLogin: (server: string, account: string, password: string) => Promise<void>; initialAccount?: string}) {
     const [server, setServer] = useState(configuredXuanServer.trim());
@@ -216,13 +222,20 @@ function QuickBar({filter, openFilter}: {filter: string; openFilter: () => void}
     )}</View>;
 }
 
-function ConversationRow({chat, index, client, onPress}: {chat: XuanChat; index: number; client: XuanClient; onPress: () => void}) {
+function ConversationRow({chat, index, client, onPress, onLongPress}: {
+    chat: XuanChat; index: number; client: XuanClient; onPress: () => void; onLongPress: () => void;
+}) {
     const remoteAvatar = client.resolveAsset(chat.avatar);
     const [avatarFailed, setAvatarFailed] = useState(false);
     useEffect(() => setAvatarFailed(false), [remoteAvatar]);
     const initial = (chat.name || '?').trim().slice(0, 1).toUpperCase();
     const unreadCount = getUnreadCount(chat);
-    return <Pressable style={({pressed}) => [styles.conversation, pressed && styles.rowPressed]} onPress={onPress}>
+    return <Pressable
+        style={({pressed}) => [styles.conversation, pressed && styles.rowPressed]}
+        onPress={onPress}
+        onLongPress={isProtectedDefaultChat(chat) ? undefined : onLongPress}
+        delayLongPress={420}
+    >
         <View>
             {remoteAvatar && !avatarFailed
                 ? <Image source={{uri: remoteAvatar}} style={styles.avatar} onError={() => setAvatarFailed(true)} />
@@ -295,16 +308,34 @@ function PopupMenus({filterOpen, addOpen, filter, close, setFilter}: {
     </>;
 }
 
-function MessageScreen({chats, client, loading, refreshing, receiving, unreadCount, refresh, openChat, openAccount, changeTab}: {
+function ConversationActionMenu({chat, close, deleteChat}: {
+    chat: XuanChat; close: () => void; deleteChat: () => void;
+}) {
+    return <Modal visible transparent animationType="fade" onRequestClose={close}>
+        <View style={styles.conversationMenuScrim}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+            <View style={styles.conversationMenu}>
+                <Text numberOfLines={1} style={styles.conversationMenuTitle}>{chat.name || '会话'}</Text>
+                <Pressable style={styles.conversationMenuRow} onPress={deleteChat} accessibilityRole="button" accessibilityLabel="删除会话">
+                    <Text style={styles.conversationMenuDelete}>删除</Text>
+                </Pressable>
+            </View>
+        </View>
+    </Modal>;
+}
+
+function MessageScreen({chats, client, loading, refreshing, receiving, unreadCount, refresh, openChat, openAccount, changeTab, deleteChat}: {
     chats: XuanChat[]; client: XuanClient; loading: boolean; refreshing: boolean; receiving: boolean;
     unreadCount: number;
     refresh: () => void; openChat: (chat: XuanChat) => void; openAccount: () => void; changeTab: (tab: string) => void;
+    deleteChat: (chat: XuanChat) => Promise<void>;
 }) {
     const [searching, setSearching] = useState(false);
     const [query, setQuery] = useState('');
     const [filter, setFilter] = useState('全部');
     const [filterOpen, setFilterOpen] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
+    const [actionChat, setActionChat] = useState<XuanChat | null>(null);
     const data = useMemo(() => {
         const keyword = query.trim().toLocaleLowerCase();
         return chats.filter((chat) => {
@@ -315,6 +346,16 @@ function MessageScreen({chats, client, loading, refreshing, receiving, unreadCou
         });
     }, [chats, filter, query]);
     const closeMenus = () => {setFilterOpen(false); setAddOpen(false)};
+    const confirmDeleteChat = async () => {
+        const target = actionChat;
+        setActionChat(null);
+        if (!target) return;
+        try {
+            await deleteChat(target);
+        } catch (reason) {
+            Alert.alert('删除失败', reason instanceof Error ? reason.message : '无法删除会话');
+        }
+    };
 
     return <View style={styles.screen}>
         <SafeAreaView edges={['top']} style={styles.topSafe}>
@@ -326,7 +367,7 @@ function MessageScreen({chats, client, loading, refreshing, receiving, unreadCou
             : <FlatList
                 data={data}
                 keyExtractor={(item) => item.gid}
-                renderItem={({item, index}) => <ConversationRow chat={item} index={index} client={client} onPress={() => openChat(item)} />}
+                renderItem={({item, index}) => <ConversationRow chat={item} index={index} client={client} onPress={() => openChat(item)} onLongPress={() => setActionChat(item)} />}
                 showsVerticalScrollIndicator
                 contentContainerStyle={[styles.listContent, !data.length && styles.emptyList]}
                 ListEmptyComponent={<Text style={styles.stateText}>暂无消息</Text>}
@@ -334,6 +375,7 @@ function MessageScreen({chats, client, loading, refreshing, receiving, unreadCou
             />}
         <BottomNav active="message" unreadCount={unreadCount} onChange={changeTab} />
         <PopupMenus filterOpen={filterOpen} addOpen={addOpen} filter={filter} close={closeMenus} setFilter={setFilter} />
+        {actionChat && <ConversationActionMenu chat={actionChat} close={() => setActionChat(null)} deleteChat={confirmDeleteChat} />}
     </View>;
 }
 
@@ -521,6 +563,8 @@ export default function XuanApp() {
     const [departments, setDepartments] = useState<XuanDepartment[]>([]);
     const [activeTab, setActiveTab] = useState('message');
     const [accountOpen, setAccountOpen] = useState(false);
+    const [customerContactOpen, setCustomerContactOpen] = useState(false);
+    const [previewCustomerContactOpen, setPreviewCustomerContactOpen] = useState(false);
     const [lastLogin, setLastLogin] = useState<{server: string; account: string} | null>(null);
     const [loadingChats, setLoadingChats] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -535,11 +579,12 @@ export default function XuanApp() {
     const [messagesError, setMessagesError] = useState('');
     const [contactsError, setContactsError] = useState('');
     const [workbenchStats, setWorkbenchStats] = useState<XuanWorkbenchStats>(DEFAULT_WORKBENCH_STATS);
+    const [customerContactData, setCustomerContactData] = useState<XuanCustomerContactData>(DEFAULT_CUSTOMER_CONTACT_DATA);
     const activeChatGid = useRef<string | null>(null);
     const unreadCount = chats.reduce((total, chat) => total + getUnreadCount(chat), 0);
 
     const sortChats = (items: XuanChat[]) => [...items]
-        .filter((chat) => !chat.hide && !chat.freeze)
+        .filter((chat) => !chat.hide && !chat.freeze && !isProtectedDefaultChat(chat))
         .sort((left, right) => getTimestamp(right.lastMessageInfo?.date || right.lastActiveTime) - getTimestamp(left.lastMessageInfo?.date || left.lastActiveTime));
 
     const loadChats = async (target: XuanClient, refresh = false) => {
@@ -568,9 +613,19 @@ export default function XuanApp() {
     };
 
     const loadWorkbenchStats = async (target: XuanClient) => {
+        let remoteStats = DEFAULT_WORKBENCH_STATS;
         try {
-            setWorkbenchStats(await target.getWorkbenchStats());
+            remoteStats = await target.getWorkbenchStats();
         } catch {}
+        let syncedData: XuanCustomerContactData | null = null;
+        try {
+            syncedData = await target.getCustomerContactData(remoteStats);
+        } catch {}
+        const cachedData = await getCustomerContactDataCache(target.server, target.account, remoteStats);
+        const nextData = syncedData || cachedData || {...DEFAULT_CUSTOMER_CONTACT_DATA, ...remoteStats};
+        setCustomerContactData(nextData);
+        setWorkbenchStats(nextData);
+        if (syncedData) void saveCustomerContactDataCache(target.server, target.account, syncedData).catch(() => {});
     };
 
     const handleLogin = async (server: string, account: string, password: string) => {
@@ -578,6 +633,7 @@ export default function XuanApp() {
         setLastLogin({server: result.session.server, account: result.session.account});
         setClient(result.client);
         setSession(result.session);
+        void loadWorkbenchStats(result.client);
         await loadChats(result.client);
     };
 
@@ -627,6 +683,10 @@ export default function XuanApp() {
     useEffect(() => {
         if (Platform.OS !== 'android') return;
         const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+            if (customerContactOpen) {
+                setCustomerContactOpen(false);
+                return true;
+            }
             if (accountOpen) {
                 setAccountOpen(false);
                 return true;
@@ -652,7 +712,7 @@ export default function XuanApp() {
             return false;
         });
         return () => subscription.remove();
-    }, [accountOpen, activeChat, activeMember, activeTab, contactDeptStack.length]);
+    }, [accountOpen, activeChat, activeMember, activeTab, contactDeptStack.length, customerContactOpen]);
 
     const openChat = async (chat: XuanChat) => {
         if (!client) return;
@@ -694,6 +754,7 @@ export default function XuanApp() {
         setDepartments([]);
         setActiveTab('message');
         setAccountOpen(false);
+        setCustomerContactOpen(false);
         setActiveChat(null);
         setActiveMember(null);
         setContactDeptStack([]);
@@ -702,6 +763,7 @@ export default function XuanApp() {
         setReconnecting(false);
         setContactsError('');
         setWorkbenchStats(DEFAULT_WORKBENCH_STATS);
+        setCustomerContactData(DEFAULT_CUSTOMER_CONTACT_DATA);
     };
 
     const changeTab = (tab: string) => {
@@ -732,18 +794,37 @@ export default function XuanApp() {
     };
 
     if (workbenchPreview) {
+        if (previewCustomerContactOpen) {
+            return <CustomerContactScreen data={DEFAULT_CUSTOMER_CONTACT_DATA} back={() => setPreviewCustomerContactOpen(false)} openSettings={() => {}} />;
+        }
         return <WorkbenchScreen
             stats={DEFAULT_WORKBENCH_STATS}
+            openCustomerContact={() => setPreviewCustomerContactOpen(true)}
             footer={<BottomNav active="work" unreadCount={0} contactsCount={1} onChange={() => {}} />}
         />;
     }
+    if (customerContactPreview) {
+        return <CustomerContactScreen data={DEFAULT_CUSTOMER_CONTACT_DATA} back={() => {}} openSettings={() => {}} />;
+    }
     if (!client || !session) return <LoginScreen onLogin={handleLogin} initialAccount={lastLogin?.account} />;
+    if (customerContactOpen) {
+        return <CustomerContactScreen
+            data={customerContactData}
+            back={() => setCustomerContactOpen(false)}
+            openSettings={() => {
+                setCustomerContactOpen(false);
+                setAccountOpen(true);
+                if (!departments.length && !loadingContacts) void loadContacts(client);
+            }}
+        />;
+    }
     if (accountOpen) {
         return <AccountScreen
             member={session.user}
             departments={departments}
             company={client.info.company}
             client={client}
+            customerContactData={customerContactData}
             back={() => setAccountOpen(false)}
             save={async (update, avatar) => {
                 let updated = await client.updateProfile(update);
@@ -752,6 +833,12 @@ export default function XuanApp() {
                 setMembers((current) => current.map((member) => member.id === updated.id ? {...member, ...updated} : member));
                 setActiveMember((current) => current?.id === updated.id ? {...current, ...updated} : current);
                 return updated;
+            }}
+            saveCustomerContactData={async (data) => {
+                const saved = await client.saveCustomerContactData(data);
+                await saveCustomerContactDataCache(client.server, client.account, saved).catch(() => {});
+                setCustomerContactData(saved);
+                setWorkbenchStats(saved);
             }}
             logout={logout}
         />;
@@ -810,6 +897,7 @@ export default function XuanApp() {
     if (activeTab === 'work') {
         return <WorkbenchScreen
             stats={workbenchStats}
+            openCustomerContact={() => setCustomerContactOpen(true)}
             footer={<BottomNav active="work" unreadCount={unreadCount} contactsCount={1} onChange={changeTab} />}
         />;
     }
@@ -845,6 +933,10 @@ export default function XuanApp() {
         unreadCount={unreadCount}
         refresh={() => loadChats(client, true)}
         openChat={openChat}
+        deleteChat={async (chat) => {
+            await client.deleteChat(chat.gid);
+            setChats((current) => current.filter((item) => item.gid !== chat.gid));
+        }}
         openAccount={() => {
             setAccountOpen(true);
             if (!departments.length && !loadingContacts) void loadContacts(client);
@@ -919,6 +1011,11 @@ const styles = StyleSheet.create({
     addDivider: {position: 'absolute', right: 14, bottom: 0, left: 53, height: StyleSheet.hairlineWidth, backgroundColor: '#eceff3'},
     addItemDot: {position: 'absolute', top: 23, right: 15, width: 9, height: 9, borderRadius: 4.5, backgroundColor: '#ff5659'},
     menuText: {color: '#30353a', fontSize: 15},
+    conversationMenuScrim: {flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)'},
+    conversationMenu: {width: 220, overflow: 'hidden', borderRadius: 8, backgroundColor: '#fff', elevation: 8, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: {width: 0, height: 5}},
+    conversationMenuTitle: {paddingHorizontal: 18, paddingTop: 17, paddingBottom: 13, color: '#858b91', fontSize: 13, textAlign: 'center'},
+    conversationMenuRow: {height: 51, alignItems: 'center', justifyContent: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#eceef0'},
+    conversationMenuDelete: {color: '#e04444', fontSize: 17},
     chatScreen: {flex: 1, backgroundColor: '#ecedf1'},
     chatTopSafe: {backgroundColor: '#ecedf1'},
     chatHeader: {height: 48, paddingHorizontal: 7, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#dfe0e4', backgroundColor: '#ecedf1'},

@@ -6,7 +6,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {Camera, ChevronLeft, LogOut, ShieldCheck, UserRound} from 'lucide-react-native';
-import {XuanAvatarUpload, XuanClient, XuanDepartment, XuanMember, XuanProfileUpdate} from '../api/xuan';
+import {XuanAvatarUpload, XuanClient, XuanCustomerContactData, XuanDepartment, XuanMember, XuanProfileUpdate} from '../api/xuan';
 
 const profileColors = ['#4d9de0', '#48b97d', '#e49b45', '#8e78d4', '#55a9a2'];
 
@@ -19,6 +19,16 @@ type ProfileDraft = {
     address: string;
 };
 
+type CustomerContactDraft = {
+    externalContactScale: string;
+    businessCategory: string;
+    customerTotal: string;
+    todayNewCustomers: string;
+    todayPayment: string;
+    weeklyOnlineRevenue: string;
+    weeklyOfflineRevenue: string;
+};
+
 const displayName = (member: XuanMember) => member.realname || member.account || `\u7528\u6237 ${member.id}`;
 const makeDraft = (member: XuanMember): ProfileDraft => ({
     realname: member.realname || '',
@@ -27,6 +37,15 @@ const makeDraft = (member: XuanMember): ProfileDraft => ({
     phone: member.phone || '',
     email: member.email || '',
     address: member.address || '',
+});
+const makeCustomerContactDraft = (data: XuanCustomerContactData): CustomerContactDraft => ({
+    externalContactScale: String(data.externalContactScale),
+    businessCategory: data.businessCategory,
+    customerTotal: String(data.customerTotal),
+    todayNewCustomers: String(data.todayNewCustomers),
+    todayPayment: data.todayPayment.toFixed(2),
+    weeklyOnlineRevenue: data.weeklyOnlineRevenue.toFixed(2),
+    weeklyOfflineRevenue: data.weeklyOfflineRevenue.toFixed(2),
 });
 
 function ProfileAvatar({member, client, previewUri}: {member: XuanMember; client: XuanClient; previewUri?: string}) {
@@ -48,7 +67,7 @@ function ProfileRow({label, value, last = false}: {label: string; value: string;
 
 function EditField({label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false}: {
     label: string; value: string; onChangeText: (value: string) => void; placeholder: string;
-    keyboardType?: 'default' | 'email-address' | 'phone-pad'; multiline?: boolean;
+    keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'numeric' | 'decimal-pad'; multiline?: boolean;
 }) {
     return <View style={[styles.editRow, multiline && styles.editRowMultiline]}>
         <Text style={styles.rowLabel}>{label}</Text>
@@ -68,18 +87,21 @@ function EditField({label, value, onChangeText, placeholder, keyboardType = 'def
 }
 
 export default function AccountScreen({
-    member, departments, company, client, back, save, logout,
+    member, departments, company, client, customerContactData, back, save, saveCustomerContactData, logout,
 }: {
     member: XuanMember;
     departments: XuanDepartment[];
     company?: string;
     client: XuanClient;
+    customerContactData: XuanCustomerContactData;
     back: () => void;
     save: (update: XuanProfileUpdate, avatar?: XuanAvatarUpload) => Promise<XuanMember>;
+    saveCustomerContactData: (data: XuanCustomerContactData) => Promise<void>;
     logout: () => Promise<void>;
 }) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(() => makeDraft(member));
+    const [customerContactDraft, setCustomerContactDraft] = useState(() => makeCustomerContactDraft(customerContactData));
     const [avatarDraft, setAvatarDraft] = useState<XuanAvatarUpload | null>(null);
     const [pickingAvatar, setPickingAvatar] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -93,18 +115,24 @@ export default function AccountScreen({
     useEffect(() => {
         if (!editing) {
             setDraft(makeDraft(member));
+            setCustomerContactDraft(makeCustomerContactDraft(customerContactData));
             setAvatarDraft(null);
         }
-    }, [editing, member]);
+    }, [editing, member, customerContactData]);
 
     const updateDraft = (key: keyof ProfileDraft, value: string) => {
         setDraft((current) => ({...current, [key]: value}));
+    };
+
+    const updateCustomerContactDraft = (key: keyof CustomerContactDraft, value: string) => {
+        setCustomerContactDraft((current) => ({...current, [key]: value}));
     };
 
     const cancelOrBack = () => {
         setError('');
         if (editing) {
             setDraft(makeDraft(member));
+            setCustomerContactDraft(makeCustomerContactDraft(customerContactData));
             setAvatarDraft(null);
             setEditing(false);
         } else {
@@ -168,11 +196,54 @@ export default function AccountScreen({
             setError(`\u5f53\u524d\u670d\u52a1\u5668\u4e0d\u652f\u6301\u6e05\u7a7a${clearing.label}\uff0c\u53ef\u4ee5\u4fee\u6539\u4e3a\u65b0\u7684\u5185\u5bb9`);
             return;
         }
+        if (customerContactDraft.businessCategory.trim().length > 30) {
+            setError('\u7ecf\u8425\u7c7b\u76ee\u4e0d\u80fd\u8d85\u8fc730\u4e2a\u5b57');
+            return;
+        }
+        const externalContactScale = Number(customerContactDraft.externalContactScale.trim());
+        const customerTotal = Number(customerContactDraft.customerTotal.trim());
+        const todayNewCustomers = Number(customerContactDraft.todayNewCustomers.trim());
+        const todayPayment = Number(customerContactDraft.todayPayment.trim());
+        const weeklyOnlineRevenue = Number(customerContactDraft.weeklyOnlineRevenue.trim());
+        const weeklyOfflineRevenue = Number(customerContactDraft.weeklyOfflineRevenue.trim());
+        const validCount = (value: string, parsed: number) => /^\d+$/.test(value.trim()) && Number.isInteger(parsed) && parsed <= 999999999;
+        const validAmount = (value: string, parsed: number) => /^\d+(\.\d{1,2})?$/.test(value.trim()) && Number.isFinite(parsed) && parsed <= 999999999999.99;
+        if (!validCount(customerContactDraft.externalContactScale, externalContactScale)) {
+            setError('\u5916\u90e8\u8054\u7cfb\u4eba\u89c4\u6a21\u5fc5\u987b\u662f0-999999999\u7684\u6574\u6570');
+            return;
+        }
+        if (!validCount(customerContactDraft.customerTotal, customerTotal)) {
+            setError('\u5ba2\u6237\u603b\u6570\u5fc5\u987b\u662f0-999999999\u7684\u6574\u6570');
+            return;
+        }
+        if (!validCount(customerContactDraft.todayNewCustomers, todayNewCustomers)) {
+            setError('\u4eca\u65e5\u65b0\u589e\u5ba2\u6237\u5fc5\u987b\u662f0-999999999\u7684\u6574\u6570');
+            return;
+        }
+        if (!validAmount(customerContactDraft.todayPayment, todayPayment)) {
+            setError('\u4eca\u65e5\u6536\u6b3e\u5fc5\u987b\u662f0-999999999999.99\u7684\u91d1\u989d');
+            return;
+        }
+        if (!validAmount(customerContactDraft.weeklyOnlineRevenue, weeklyOnlineRevenue) || !validAmount(customerContactDraft.weeklyOfflineRevenue, weeklyOfflineRevenue)) {
+            setError('\u672c\u5468\u4e1a\u7ee9\u5fc5\u987b\u662f0-999999999999.99\u7684\u91d1\u989d');
+            return;
+        }
+        const nextCustomerContactData: XuanCustomerContactData = {
+            externalContactScale,
+            businessCategory: customerContactDraft.businessCategory.trim() || '\u672a\u77e5',
+            customerTotal,
+            todayNewCustomers,
+            todayPayment: Math.round(todayPayment * 100) / 100,
+            weeklyOnlineRevenue: Math.round(weeklyOnlineRevenue * 100) / 100,
+            weeklyOfflineRevenue: Math.round(weeklyOfflineRevenue * 100) / 100,
+        };
         setSaving(true);
         setError('');
         try {
             const updated = await save(update, avatarDraft || undefined);
+            await saveCustomerContactData(nextCustomerContactData);
             setDraft(makeDraft(updated));
+            setCustomerContactDraft(makeCustomerContactDraft(nextCustomerContactData));
             setAvatarDraft(null);
             setEditing(false);
         } catch (reason) {
@@ -266,6 +337,24 @@ export default function AccountScreen({
                 <ProfileRow label={'\u5730\u5740'} value={member.address || ''} last />
             </View>}
 
+            {editing ? <View style={styles.card}>
+                <EditField label={'\u5916\u90e8\u8054\u7cfb\u4eba\u89c4\u6a21'} value={customerContactDraft.externalContactScale} onChangeText={(value) => updateCustomerContactDraft('externalContactScale', value)} placeholder={'\u8bf7\u8f93\u5165\u89c4\u6a21'} keyboardType="numeric" />
+                <EditField label={'\u7ecf\u8425\u7c7b\u76ee'} value={customerContactDraft.businessCategory} onChangeText={(value) => updateCustomerContactDraft('businessCategory', value)} placeholder={'\u8bf7\u8f93\u5165\u7ecf\u8425\u7c7b\u76ee'} />
+                <EditField label={'\u5ba2\u6237\u603b\u6570'} value={customerContactDraft.customerTotal} onChangeText={(value) => updateCustomerContactDraft('customerTotal', value)} placeholder={'\u8bf7\u8f93\u5165\u5ba2\u6237\u603b\u6570'} keyboardType="numeric" />
+                <EditField label={'\u4eca\u65e5\u65b0\u589e'} value={customerContactDraft.todayNewCustomers} onChangeText={(value) => updateCustomerContactDraft('todayNewCustomers', value)} placeholder={'\u8bf7\u8f93\u5165\u4eca\u65e5\u65b0\u589e\u5ba2\u6237'} keyboardType="numeric" />
+                <EditField label={'\u4eca\u65e5\u6536\u6b3e'} value={customerContactDraft.todayPayment} onChangeText={(value) => updateCustomerContactDraft('todayPayment', value)} placeholder={'\u8bf7\u8f93\u5165\u4eca\u65e5\u6536\u6b3e'} keyboardType="decimal-pad" />
+                <EditField label={'\u672c\u5468\u7ebf\u4e0a'} value={customerContactDraft.weeklyOnlineRevenue} onChangeText={(value) => updateCustomerContactDraft('weeklyOnlineRevenue', value)} placeholder={'\u8bf7\u8f93\u5165\u7ebf\u4e0a\u4e1a\u7ee9'} keyboardType="decimal-pad" />
+                <EditField label={'\u672c\u5468\u7ebf\u4e0b'} value={customerContactDraft.weeklyOfflineRevenue} onChangeText={(value) => updateCustomerContactDraft('weeklyOfflineRevenue', value)} placeholder={'\u8bf7\u8f93\u5165\u7ebf\u4e0b\u4e1a\u7ee9'} keyboardType="decimal-pad" />
+            </View> : <View style={styles.card}>
+                <ProfileRow label={'\u5916\u90e8\u8054\u7cfb\u4eba\u89c4\u6a21'} value={String(customerContactData.externalContactScale)} />
+                <ProfileRow label={'\u7ecf\u8425\u7c7b\u76ee'} value={customerContactData.businessCategory} />
+                <ProfileRow label={'\u5ba2\u6237\u603b\u6570'} value={String(customerContactData.customerTotal)} />
+                <ProfileRow label={'\u4eca\u65e5\u65b0\u589e'} value={String(customerContactData.todayNewCustomers)} />
+                <ProfileRow label={'\u4eca\u65e5\u6536\u6b3e'} value={`\u00a5${customerContactData.todayPayment.toFixed(2)}`} />
+                <ProfileRow label={'\u672c\u5468\u7ebf\u4e0a'} value={`\u00a5${customerContactData.weeklyOnlineRevenue.toFixed(2)}`} />
+                <ProfileRow label={'\u672c\u5468\u7ebf\u4e0b'} value={`\u00a5${customerContactData.weeklyOfflineRevenue.toFixed(2)}`} last />
+            </View>}
+
             <View style={styles.card}>
                 <ProfileRow label={'\u90e8\u95e8'} value={department?.name || '\u672a\u8bbe\u7f6e'} />
                 <View style={[styles.profileRow, styles.lastRow]}>
@@ -327,7 +416,7 @@ const styles = StyleSheet.create({
     card: {marginTop: 11, paddingLeft: 15, overflow: 'hidden', borderRadius: 8, backgroundColor: '#fff'},
     profileRow: {minHeight: 50, paddingRight: 14, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e8eaec'},
     lastRow: {borderBottomWidth: 0},
-    rowLabel: {width: 66, color: '#15191d', fontSize: 16},
+    rowLabel: {width: 112, color: '#15191d', fontSize: 16},
     rowValue: {minWidth: 0, flex: 1, color: '#555b62', fontSize: 16, lineHeight: 21, textAlign: 'right'},
     companyValue: {minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', columnGap: 7},
     editRow: {minHeight: 54, paddingRight: 14, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e8eaec'},
