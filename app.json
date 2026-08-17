@@ -2,7 +2,7 @@
   "expo": {
     "name": "企业微信",
     "slug": "xuan-mobile",
-    "version": "1.0.5",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/wecom-icon.png",
     "splash": {
@@ -13,6 +13,7 @@
     "extra": {
       "xuanServer": "http://118.89.198.109:11443",
       "xuanWebServer": "http://127.0.0.1:11443",
+      "androidUpdateManifestUrl": "http://118.89.198.109:9080/data/client/android-latest.json",
       "showServerInput": false
     },
     "userInterfaceStyle": "light",
@@ -25,7 +26,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": false,
       "package": "com.xxa.xuanim",
-      "versionCode": 6
+      "versionCode": 9
     },
     "web": {
       "favicon": "./assets/wecom-favicon.png"
@@ -50,3 +51,4 @@
     ]
   }
 }
+
