@@ -5,8 +5,9 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {Camera, ChevronLeft, LogOut, ShieldCheck, UserRound} from 'lucide-react-native';
+import {Camera, ChevronLeft, ChevronRight, LogOut, ShieldCheck, UserRound} from 'lucide-react-native';
 import {XuanAvatarUpload, XuanClient, XuanCustomerContactData, XuanDepartment, XuanMember, XuanProfileUpdate} from '../api/xuan';
+import {useAppUpdate} from '../update/AppUpdateProvider';
 
 const profileColors = ['#4d9de0', '#48b97d', '#e49b45', '#8e78d4', '#55a9a2'];
 
@@ -108,6 +109,7 @@ export default function AccountScreen({
     const [loggingOut, setLoggingOut] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [error, setError] = useState('');
+    const appUpdate = useAppUpdate();
     const department = departments.find((item) => item.id === Number(member.dept || 0));
     const companyName = company?.trim() || '\u4f01\u4e1a\u901a\u8baf\u5f55';
     const genderText = member.gender === 'm' ? '\u7537' : member.gender === 'f' ? '\u5973' : '\u672a\u8bbe\u7f6e';
@@ -366,6 +368,29 @@ export default function AccountScreen({
                 </View>
             </View>
 
+            {!editing && <View style={styles.card}>
+                <Pressable
+                    style={({pressed}) => [styles.updateRow, pressed && styles.updateRowPressed]}
+                    onPress={() => void appUpdate.checkForUpdate()}
+                    accessibilityRole="button"
+                    accessibilityLabel={'\u68c0\u67e5\u5e94\u7528\u66f4\u65b0'}
+                >
+                    <Text style={styles.rowLabel}>{'\u7248\u672c\u66f4\u65b0'}</Text>
+                    <View style={styles.updateValue}>
+                        <Text style={[styles.rowValue, appUpdate.latestVersion && styles.updateAvailable]}>
+                            {appUpdate.status === 'checking'
+                                ? '\u68c0\u67e5\u4e2d...'
+                                : appUpdate.status === 'downloading'
+                                    ? `\u4e0b\u8f7d ${appUpdate.progress}%`
+                                    : appUpdate.latestVersion
+                                        ? `\u65b0\u7248\u672c v${appUpdate.latestVersion.versionName}`
+                                        : `v${appUpdate.currentVersionName}`}
+                        </Text>
+                        <ChevronRight size={18} color="#a1a6ac" strokeWidth={1.8} />
+                    </View>
+                </Pressable>
+            </View>}
+
             {!!error && <Text style={styles.errorText}>{error}</Text>}
             {!editing && <Pressable style={({pressed}) => [styles.logoutButton, pressed && styles.logoutButtonPressed]} onPress={() => setConfirmOpen(true)}>
                 <LogOut size={20} color="#d64c46" strokeWidth={1.8} />
@@ -415,6 +440,10 @@ const styles = StyleSheet.create({
     account: {marginTop: 7, color: '#92979d', fontSize: 13},
     card: {marginTop: 11, paddingLeft: 15, overflow: 'hidden', borderRadius: 8, backgroundColor: '#fff'},
     profileRow: {minHeight: 50, paddingRight: 14, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e8eaec'},
+    updateRow: {minHeight: 50, paddingRight: 12, flexDirection: 'row', alignItems: 'center'},
+    updateRowPressed: {backgroundColor: '#f5f7f9'},
+    updateValue: {minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', columnGap: 5},
+    updateAvailable: {color: '#287dd7', fontWeight: '500'},
     lastRow: {borderBottomWidth: 0},
     rowLabel: {width: 112, color: '#15191d', fontSize: 16},
     rowValue: {minWidth: 0, flex: 1, color: '#555b62', fontSize: 16, lineHeight: 21, textAlign: 'right'},
@@ -442,3 +471,4 @@ const styles = StyleSheet.create({
     cancelText: {color: '#43494f', fontSize: 16},
     confirmLogoutText: {color: '#d64c46', fontSize: 16, fontWeight: '500'},
 });
+
