@@ -1,13 +1,13 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {
-    ActivityIndicator, Alert, BackHandler, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform,
-    Pressable, RefreshControl, StyleSheet, Text, TextInput, View,
+    ActivityIndicator, Alert, BackHandler, FlatList, GestureResponderEvent, Image, Keyboard, KeyboardAvoidingView, Modal, Platform,
+    Pressable, RefreshControl, StyleSheet, Text, TextInput, useWindowDimensions, View,
 } from 'react-native';
 import {StatusBar} from 'expo-status-bar';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import {
-    Check, ChevronDown, Coffee, Eye, EyeOff, LockKeyhole, MessageCircle, MessageSquareCode,
+    ArrowLeft, Check, ChevronDown, ChevronRight, Coffee, Contact, Eye, EyeOff, LockKeyhole, MessageCircle, MessageSquareCode,
     MessagesSquare, RefreshCw, ScanLine, Search, Server, Sparkles, UserRound, X,
 } from 'lucide-react-native';
 import appConfig from '../../app.json';
@@ -37,6 +37,47 @@ const bottomTabs = [
     {key: 'contacts', label: '通讯录', icon: WecomContactsIcon},
 ];
 
+const searchCategories = ['全部', '联系人', '群聊', '面聊', '聊天记录', '邮件', '文档'] as const;
+type SearchCategory = typeof searchCategories[number];
+
+const searchPreviewMembers: XuanMember[] = [
+    {id: 2, account: 'xb', realname: '小北.', dept: 1},
+];
+const searchPreviewRemoteMembers: XuanMember[] = [
+    {id: 3, account: 'lxx', realname: '刘双喜', dept: 1},
+    {id: 4, account: 'a-xiangzi', realname: 'A软件开发翔子(需求分析)(A软件开发l...', dept: 3},
+    {id: 5, account: 'a-taozi', realname: '桃子(A软件开发-桃子)', dept: 2},
+    {id: 6, account: 'a-ruanjian', realname: 'A软件开发', dept: 2},
+    {id: 7, account: 'a-xiaoyang', realname: 'A软件开发-小羊', dept: 2},
+    {id: 8, account: 'a-boluo', realname: 'A软件开发—保罗(A软件开发—保罗)', dept: 2},
+    {id: 9, account: 'a-jiangyanfen', realname: '江燕汾', dept: 4},
+    {id: 10, account: 'a-tangzhouwen', realname: '唐周文', dept: 4},
+    {id: 11, account: 'a-liaoyuxuan', realname: '廖宇轩', dept: 5},
+    {id: 12, account: 'a-xiaohang', realname: '肖俞航', dept: 4},
+    {id: 13, account: 'a-jiangxiaoqing', realname: '蒋小晴', dept: 5},
+];
+const searchPreviewDepartments: XuanDepartment[] = [
+    {id: 1, name: '瀚海黎明'},
+    {id: 2, name: '售前商务', parent: 1},
+    {id: 3, name: '需求分析', parent: 2},
+    {id: 4, name: '研发部门', parent: 1},
+    {id: 5, name: '后端开发', parent: 4},
+];
+const searchPreviewChats: XuanChat[] = [
+    {gid: 'preview-group', name: '北屿云科 (3)', type: 'group', members: [1, 2, 3], lastMessageInfo: {gid: 'preview-message', cgid: 'preview-group', user: 2, date: Date.now(), content: '实时新增用户反馈132例，请相关同事注意。', contentType: 'plain'}},
+];
+const searchPreviewMessages: Record<string, XuanMessage[]> = {
+    'preview-group': [searchPreviewChats[0].lastMessageInfo as XuanMessage],
+};
+const searchPreviewClient = {
+    getMessages: async (cgid: string) => searchPreviewMessages[cgid] || [],
+    searchMembers: async (keyword: string) => {
+        const normalizedKeyword = keyword.toLocaleLowerCase();
+        return searchPreviewRemoteMembers.filter((member) => `${member.realname || ''}\n${member.account}`.toLocaleLowerCase().includes(normalizedKeyword));
+    },
+    resolveAsset: () => undefined,
+} as unknown as XuanClient;
+
 const chatAttachmentActions = [
     {key: 'image', label: '图片', icon: AttachmentImageIcon},
     {key: 'camera', label: '拍摄', icon: AttachmentCameraIcon},
@@ -58,6 +99,8 @@ const workbenchPreview = __DEV__ && Platform.OS === 'web' &&
     typeof window !== 'undefined' && window.location.search.includes('workbenchPreview=1');
 const customerContactPreview = __DEV__ && Platform.OS === 'web' &&
     typeof window !== 'undefined' && window.location.search.includes('customerContactPreview=1');
+const messageSearchPreview = __DEV__ && Platform.OS === 'web' &&
+    typeof window !== 'undefined' && window.location.search.includes('messageSearchPreview=1');
 
 const formatListTime = (value?: number) => {
     const timestamp = getTimestamp(value);
@@ -178,29 +221,18 @@ function LoginScreen({onLogin, initialAccount}: {onLogin: (server: string, accou
     </KeyboardAvoidingView>;
 }
 
-function Header({searching, receiving, query, setQuery, setSearching, openAdd, openAccount}: {
+function Header({receiving, openSearch, openAdd, openAccount}: {
     receiving: boolean;
-    searching: boolean; query: string; setQuery: (value: string) => void;
-    setSearching: (value: boolean) => void; openAdd: () => void; openAccount: () => void;
+    openSearch: () => void; openAdd: () => void; openAccount: () => void;
 }) {
-    if (searching) {
-        return <View style={styles.searchHeader}>
-            <View style={styles.searchField}>
-                <Search size={19} color="#6c747d" />
-                <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="搜索" placeholderTextColor="#9ca3aa" style={styles.searchInput} />
-                {!!query && <Pressable hitSlop={10} onPress={() => setQuery('')}><X size={18} color="#8d949b" /></Pressable>}
-            </View>
-            <Pressable style={styles.cancel} onPress={() => {setSearching(false); setQuery('')}}><Text>取消</Text></Pressable>
-        </View>;
-    }
     return <View style={styles.header}>
         <Pressable style={styles.accountButtonOverlay} onPress={openAccount} accessibilityLabel={'\u4e2a\u4eba\u4fe1\u606f'} />
         <Pressable style={styles.headerButton} accessibilityLabel="菜单"><MenuDeviceIcon size={28} color="#050a11" /></Pressable>
         <Text style={styles.headerTitle}>{receiving ? '收取中...' : '消息'}</Text>
         <View style={styles.headerActions}>
-            <Pressable style={styles.headerButton} onPress={() => setSearching(true)} accessibilityLabel="搜索"><WecomSearchIcon size={29} color="#050a11" /></Pressable>
+            <Pressable style={styles.headerButton} onPress={openSearch} accessibilityLabel="搜索"><WecomSearchIcon size={29} color="#050a11" /></Pressable>
             <Pressable style={styles.headerButton} onPress={openAdd} accessibilityLabel="新建">
-                <WecomAddIcon size={29} color="#050a11" /><View style={styles.newDot} />
+                <WecomAddIcon size={29} color="#050a11" />
             </Pressable>
         </View>
     </View>;
@@ -222,8 +254,8 @@ function QuickBar({filter, openFilter}: {filter: string; openFilter: () => void}
     )}</View>;
 }
 
-function ConversationRow({chat, index, client, onPress, onLongPress}: {
-    chat: XuanChat; index: number; client: XuanClient; onPress: () => void; onLongPress: () => void;
+function ConversationRow({chat, index, client, selected, onPress, onLongPress}: {
+    chat: XuanChat; index: number; client: XuanClient; selected?: boolean; onPress: () => void; onLongPress?: (event: GestureResponderEvent) => void;
 }) {
     const remoteAvatar = client.resolveAsset(chat.avatar);
     const [avatarFailed, setAvatarFailed] = useState(false);
@@ -231,7 +263,7 @@ function ConversationRow({chat, index, client, onPress, onLongPress}: {
     const initial = (chat.name || '?').trim().slice(0, 1).toUpperCase();
     const unreadCount = getUnreadCount(chat);
     return <Pressable
-        style={({pressed}) => [styles.conversation, pressed && styles.rowPressed]}
+        style={({pressed}) => [styles.conversation, selected && styles.rowSelected, pressed && styles.rowPressed]}
         onPress={onPress}
         onLongPress={isProtectedDefaultChat(chat) ? undefined : onLongPress}
         delayLongPress={420}
@@ -253,6 +285,252 @@ function ConversationRow({chat, index, client, onPress, onLongPress}: {
     </Pressable>;
 }
 
+type MessageSearchHit = {chat: XuanChat; message: XuanMessage};
+type GlobalSearchRow =
+    | {key: string; kind: 'section'; title: string; separated: boolean}
+    | {key: string; kind: 'member'; member: XuanMember; index: number}
+    | {key: string; kind: 'message'; hit: MessageSearchHit; index: number};
+
+const renderHighlightedText = (text: string, keyword: string) => {
+    const index = text.toLocaleLowerCase().indexOf(keyword.toLocaleLowerCase());
+    if (index < 0) return text;
+    return <>{text.slice(0, index)}<Text style={styles.globalSearchMatch}>{text.slice(index, index + keyword.length)}</Text>{text.slice(index + keyword.length)}</>;
+};
+
+function GlobalSearchAvatar({source, label, index, client}: {source: unknown; label: string; index: number; client?: XuanClient}) {
+    const uri = client?.resolveAsset(source);
+    const [failed, setFailed] = useState(false);
+    useEffect(() => setFailed(false), [uri]);
+    return uri && !failed
+        ? <Image source={{uri}} style={styles.globalSearchAvatar} onError={() => setFailed(true)} />
+        : <View style={[styles.globalSearchAvatar, styles.fallbackAvatar, {backgroundColor: avatarColors[index % avatarColors.length]}]}><Text style={styles.globalSearchAvatarText}>{label.trim().slice(0, 1).toUpperCase() || '?'}</Text></View>;
+}
+
+const getDepartmentPath = (departmentID: number | undefined, departmentMap: Map<number, XuanDepartment>) => {
+    const names: string[] = [];
+    const visited = new Set<number>();
+    let currentID = Number(departmentID || 0);
+    while (currentID && !visited.has(currentID)) {
+        visited.add(currentID);
+        const department = departmentMap.get(currentID);
+        if (!department) break;
+        names.unshift(department.name);
+        currentID = Number(department.parent || 0);
+    }
+    return names.join('/');
+};
+
+function MessageSearchScreen({chats, members, departments, client, openChat, openMember, back}: {
+    chats: XuanChat[]; members: XuanMember[]; departments: XuanDepartment[]; client?: XuanClient;
+    openChat: (chat: XuanChat) => void; openMember: (member: XuanMember) => void; back: () => void;
+}) {
+    const inputRef = useRef<TextInput>(null);
+    const [query, setQuery] = useState('');
+    const [category, setCategory] = useState<SearchCategory>('全部');
+    const [remoteContactResults, setRemoteContactResults] = useState<XuanMember[]>([]);
+    const [contactLoading, setContactLoading] = useState(false);
+    const [messageResults, setMessageResults] = useState<MessageSearchHit[]>([]);
+    const [messageLoading, setMessageLoading] = useState(false);
+    const messageCache = useRef(new Map<string, XuanMessage[]>());
+    const contactSearchRequest = useRef(0);
+    const searchRequest = useRef(0);
+    const keyword = query.trim();
+    const departmentMap = useMemo(() => new Map(departments.map((department) => [department.id, department])), [departments]);
+    const localContactResults = useMemo(() => {
+        if (!keyword || !['全部', '联系人'].includes(category)) return [];
+        const normalizedKeyword = keyword.toLocaleLowerCase();
+        return members.filter((member) => !member.deleted && `${member.realname || ''}\n${member.account || ''}\n${member.mobile || ''}\n${member.email || ''}`.toLocaleLowerCase().includes(normalizedKeyword));
+    }, [category, keyword, members]);
+    const contactResults = useMemo(() => {
+        const merged = new Map<number, XuanMember>();
+        [...localContactResults, ...remoteContactResults].forEach((member) => {
+            if (!member.deleted) merged.set(member.id, member);
+        });
+        return [...merged.values()];
+    }, [localContactResults, remoteContactResults]);
+
+    useEffect(() => {
+        const requestID = ++contactSearchRequest.current;
+        const shouldSearchContacts = !!client && !!keyword && ['全部', '联系人'].includes(category);
+        setRemoteContactResults([]);
+        if (!shouldSearchContacts) {
+            setContactLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setContactLoading(true);
+        const timer = setTimeout(() => {
+            void client.searchMembers(keyword)
+                .then((results) => {
+                    if (!cancelled && requestID === contactSearchRequest.current) setRemoteContactResults(results);
+                })
+                .catch(() => {})
+                .finally(() => {
+                    if (!cancelled && requestID === contactSearchRequest.current) setContactLoading(false);
+                });
+        }, 250);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [category, client, keyword]);
+
+    useEffect(() => {
+        const requestID = ++searchRequest.current;
+        const shouldSearchMessages = !!client && !!keyword && ['全部', '聊天记录'].includes(category);
+        setMessageResults([]);
+        if (!shouldSearchMessages) {
+            setMessageLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setMessageLoading(true);
+        const timer = setTimeout(() => {
+            void (async () => {
+                const hits: MessageSearchHit[] = [];
+                for (let offset = 0; offset < chats.length; offset += 6) {
+                    const batch = chats.slice(offset, offset + 6);
+                    const loaded = await Promise.all(batch.map(async (chat) => {
+                        let chatMessages = messageCache.current.get(chat.gid);
+                        const cachedLastIndex = chatMessages?.at(-1)?.index || 0;
+                        const currentLastIndex = chat.lastMessageInfo?.index || 0;
+                        if (!chatMessages || currentLastIndex > cachedLastIndex) {
+                            try {
+                                chatMessages = await client.getMessages(chat.gid, 100);
+                                messageCache.current.set(chat.gid, chatMessages);
+                            } catch {
+                                chatMessages = [];
+                            }
+                        }
+                        return {chat, messages: chatMessages};
+                    }));
+                    loaded.forEach(({chat, messages: chatMessages}) => {
+                        for (let index = chatMessages.length - 1; index >= 0; index -= 1) {
+                            const message = chatMessages[index];
+                            if (!message.deleted && chatMessageText(message).toLocaleLowerCase().includes(keyword.toLocaleLowerCase())) {
+                                hits.push({chat, message});
+                                break;
+                            }
+                        }
+                    });
+                }
+                if (!cancelled && requestID === searchRequest.current) {
+                    setMessageResults(hits.sort((left, right) => getTimestamp(right.message.date) - getTimestamp(left.message.date)));
+                    setMessageLoading(false);
+                }
+            })();
+        }, 250);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [category, chats, client, keyword]);
+
+    const rows = useMemo(() => {
+        const items: GlobalSearchRow[] = [];
+        if (contactResults.length) {
+            items.push({key: 'section-contacts', kind: 'section', title: '联系人', separated: false});
+            contactResults.forEach((member, index) => items.push({key: `member-${member.id}`, kind: 'member', member, index}));
+        }
+        if (messageResults.length) {
+            items.push({key: 'section-messages', kind: 'section', title: '聊天记录', separated: items.length > 0});
+            messageResults.forEach((hit, index) => items.push({key: `message-${hit.chat.gid}`, kind: 'message', hit, index}));
+        }
+        return items;
+    }, [contactResults, messageResults]);
+
+    return <View style={styles.globalSearchScreen}>
+        <SafeAreaView edges={['top']} style={styles.globalSearchSafe}>
+            <View style={styles.globalSearchHeader}>
+                <Pressable style={styles.globalSearchBack} onPress={back} accessibilityRole="button" accessibilityLabel="返回消息">
+                    <ArrowLeft size={24} color="#0c1117" strokeWidth={2} />
+                </Pressable>
+                <TextInput
+                    ref={inputRef}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="搜索"
+                    placeholderTextColor="#929aa4"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    style={styles.globalSearchInput}
+                    accessibilityLabel="搜索"
+                />
+                {!!query && <Pressable style={styles.globalSearchClear} onPress={() => setQuery('')} accessibilityRole="button" accessibilityLabel="清除搜索">
+                    <View style={styles.globalSearchClearIcon}><X size={14} color="#fff" strokeWidth={2.2} /></View>
+                </Pressable>}
+            </View>
+        </SafeAreaView>
+        <View style={styles.globalSearchTabs}>
+            {searchCategories.map((item) => {
+                const selected = item === category;
+                return <Pressable
+                    key={item}
+                    style={styles.globalSearchTab}
+                    onPress={() => setCategory(item)}
+                    accessibilityRole="tab"
+                    accessibilityState={{selected}}
+                >
+                    <Text numberOfLines={1} style={[styles.globalSearchTabText, selected && styles.globalSearchTabTextActive]}>{item}</Text>
+                    {selected && <View style={styles.globalSearchIndicator} />}
+                </Pressable>;
+            })}
+        </View>
+        {keyword
+            ? <FlatList<GlobalSearchRow>
+                data={rows}
+                keyExtractor={(item) => item.key}
+                renderItem={({item}) => {
+                    if (item.kind === 'section') {
+                        return <View style={[styles.globalSearchSection, item.separated && styles.globalSearchSectionSeparated]}><Text style={styles.globalSearchSectionText}>{item.title}</Text></View>;
+                    }
+                    if (item.kind === 'member') {
+                        const name = item.member.realname || item.member.account;
+                        const meta = getDepartmentPath(item.member.dept, departmentMap) || item.member.account;
+                        return <Pressable style={({pressed}) => [styles.globalSearchResultRow, pressed && styles.rowPressed]} onPress={() => openMember(item.member)} accessibilityRole="button" accessibilityLabel={`查看联系人${name}`}>
+                            <GlobalSearchAvatar source={item.member.avatar} label={name} index={item.index} client={client} />
+                            <View style={styles.globalSearchResultBody}>
+                                <Text numberOfLines={1} style={styles.globalSearchResultName}>{renderHighlightedText(name, keyword)}</Text>
+                                <Text numberOfLines={1} style={styles.globalSearchResultMeta}>{renderHighlightedText(meta, keyword)}</Text>
+                            </View>
+                            <Contact size={20} color="#a1a6ab" strokeWidth={1.8} />
+                        </Pressable>;
+                    }
+                    const chatName = item.hit.chat.name || '未命名会话';
+                    const preview = messagePreview(item.hit.message);
+                    return <Pressable style={({pressed}) => [styles.globalSearchResultRow, styles.globalSearchMessageRow, pressed && styles.rowPressed]} onPress={() => openChat(item.hit.chat)} accessibilityRole="button" accessibilityLabel={`打开聊天${chatName}`}>
+                        <GlobalSearchAvatar source={item.hit.chat.avatar} label={chatName} index={item.index + contactResults.length} client={client} />
+                        <View style={styles.globalSearchResultBody}>
+                            <View style={styles.globalSearchResultTitleLine}>
+                                <Text numberOfLines={1} style={styles.globalSearchResultName}>{chatName}</Text>
+                                {item.hit.chat.type === 'group' && <Text style={styles.globalSearchGroupBadge}>全员</Text>}
+                            </View>
+                            <Text numberOfLines={1} style={styles.globalSearchResultMeta}>{renderHighlightedText(preview, keyword)}</Text>
+                        </View>
+                    </Pressable>;
+                }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[styles.globalSearchResults, !rows.length && styles.emptyList]}
+                ListEmptyComponent={contactLoading || messageLoading ? <ActivityIndicator color="#437be8" /> : <Text style={styles.stateText}>暂无搜索结果</Text>}
+                ListFooterComponent={rows.length && (contactLoading || messageLoading) ? <View style={styles.globalSearchLoading}><ActivityIndicator color="#437be8" /></View> : null}
+            />
+            : <View style={styles.globalSearchIdle}>
+                <Pressable style={({pressed}) => [styles.smartSearchButton, pressed && styles.smartSearchButtonPressed]} onPress={() => inputRef.current?.focus()} accessibilityRole="button" accessibilityLabel="智能搜索">
+                    <View style={styles.smartSearchIcon}>
+                        <Search size={19} color="#747a80" strokeWidth={2.4} />
+                        <Sparkles size={9} color="#747a80" strokeWidth={2.2} style={styles.smartSearchSparkle} />
+                    </View>
+                    <Text style={styles.smartSearchText}>智能搜索</Text>
+                    <ChevronRight size={14} color="#b6babf" strokeWidth={2} />
+                </Pressable>
+            </View>}
+    </View>;
+}
+
 function BottomNav({active, unreadCount, contactsCount = 0, onChange}: {
     active: string; unreadCount: number; contactsCount?: number; onChange: (tab: string) => void;
 }) {
@@ -262,7 +540,7 @@ function BottomNav({active, unreadCount, contactsCount = 0, onChange}: {
             const badgeCount = key === 'message' ? unreadCount : key === 'contacts' ? contactsCount : 0;
             return <Pressable key={key} style={styles.bottomItem} onPress={() => onChange(key)}>
                 <View style={styles.bottomIconWrap}>
-                    <Icon size={28} color={selected ? '#437be8' : '#707072'} active={selected} />
+                    <Icon size={key === 'mail' || key === 'docs' ? 34 : 28} color={selected ? '#437be8' : '#707072'} active={selected} />
                     {badgeCount > 0 && <View style={styles.bottomUnreadBadge}><Text style={styles.bottomUnreadBadgeText}>{badgeCount > 99 ? '99+' : badgeCount}</Text></View>}
                 </View>
                 <Text style={[styles.bottomLabel, selected && styles.bottomLabelActive]}>{label}</Text>
@@ -277,7 +555,7 @@ function PopupMenus({filterOpen, addOpen, filter, close, setFilter}: {
     const {top} = useSafeAreaInsets();
     const addItems = [
         {label: '发起群聊', icon: MessageCircle, filled: true, onPress: close},
-        {label: '记录面聊', icon: MessageSquareCode, showDot: true, onPress: close},
+        {label: '记录面聊', icon: MessageSquareCode, onPress: close},
         {label: '添加客户', icon: MessagesSquare, onPress: close},
         {label: '智能总结', icon: Sparkles, onPress: close},
         {label: '扫一扫', icon: ScanLine, onPress: close},
@@ -295,11 +573,10 @@ function PopupMenus({filterOpen, addOpen, filter, close, setFilter}: {
         </Modal>
         <Modal visible={addOpen} transparent animationType="fade" onRequestClose={close}>
             <Pressable style={[styles.scrim, styles.addScrim]} onPress={close}><View style={[styles.addMenu, {top: top + 56}]}>
-                {addItems.map(({label, icon: Icon, filled, showDot, onPress}, index) =>
+                {addItems.map(({label, icon: Icon, filled, onPress}, index) =>
                     <Pressable key={label} style={styles.addRow} onPress={onPress}>
                         <Icon size={22} color={'#3974e8'} fill={filled ? '#3974e8' : 'none'} strokeWidth={1.8} />
                         <Text style={styles.addMenuText}>{label}</Text>
-                        {showDot && <View style={styles.addItemDot} />}
                         {index < addItems.length - 1 && <View style={styles.addDivider} />}
                     </Pressable>
                 )}
@@ -308,58 +585,82 @@ function PopupMenus({filterOpen, addOpen, filter, close, setFilter}: {
     </>;
 }
 
-function ConversationActionMenu({chat, close, deleteChat}: {
-    chat: XuanChat; close: () => void; deleteChat: () => void;
+type ConversationAction = 'unread' | 'star' | 'add' | 'hide' | 'delete';
+
+function ConversationActionMenu({position, close, onAction}: {
+    position: {x: number; y: number}; close: () => void; onAction: (action: ConversationAction) => void;
 }) {
+    const {width, height} = useWindowDimensions();
+    const menuWidth = 132;
+    const menuHeight = 5 * 48;
+    const left = Math.min(Math.max(position.x + 8, 10), Math.max(10, width - menuWidth - 10));
+    const top = Math.min(Math.max(position.y - 18, 8), Math.max(8, height - menuHeight - 8));
+    const items: {key: ConversationAction; label: string}[] = [
+        {key: 'unread', label: '标为未读'},
+        {key: 'star', label: '置顶'},
+        {key: 'add', label: '添加...'},
+        {key: 'hide', label: '不显示'},
+        {key: 'delete', label: '删除'},
+    ];
     return <Modal visible transparent animationType="fade" onRequestClose={close}>
         <View style={styles.conversationMenuScrim}>
             <Pressable style={StyleSheet.absoluteFill} onPress={close} />
-            <View style={styles.conversationMenu}>
-                <Text numberOfLines={1} style={styles.conversationMenuTitle}>{chat.name || '会话'}</Text>
-                <Pressable style={styles.conversationMenuRow} onPress={deleteChat} accessibilityRole="button" accessibilityLabel="删除会话">
-                    <Text style={styles.conversationMenuDelete}>删除</Text>
-                </Pressable>
+            <View style={[styles.conversationMenu, {left, top}]}>
+                {items.map(({key, label}, index) => <Pressable
+                    key={key}
+                    style={({pressed}) => [styles.conversationMenuRow, pressed && styles.conversationMenuRowPressed]}
+                    onPress={() => onAction(key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={label}
+                >
+                    <Text style={styles.conversationMenuText}>{label}</Text>
+                    {index < items.length - 1 && <View style={styles.conversationMenuDivider} />}
+                </Pressable>)}
             </View>
         </View>
     </Modal>;
 }
 
-function MessageScreen({chats, client, loading, refreshing, receiving, unreadCount, refresh, openChat, openAccount, changeTab, deleteChat}: {
+function MessageScreen({chats, client, loading, refreshing, receiving, unreadCount, refresh, openChat, openSearch, openAccount, changeTab, deleteChat, markChatUnread, setChatStar, hideChat}: {
     chats: XuanChat[]; client: XuanClient; loading: boolean; refreshing: boolean; receiving: boolean;
     unreadCount: number;
-    refresh: () => void; openChat: (chat: XuanChat) => void; openAccount: () => void; changeTab: (tab: string) => void;
+    refresh: () => void; openChat: (chat: XuanChat) => void; openSearch: () => void; openAccount: () => void; changeTab: (tab: string) => void;
     deleteChat: (chat: XuanChat) => Promise<void>;
+    markChatUnread: (chat: XuanChat) => Promise<void>;
+    setChatStar: (chat: XuanChat) => Promise<void>;
+    hideChat: (chat: XuanChat) => Promise<void>;
 }) {
-    const [searching, setSearching] = useState(false);
-    const [query, setQuery] = useState('');
     const [filter, setFilter] = useState('全部');
     const [filterOpen, setFilterOpen] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
     const [actionChat, setActionChat] = useState<XuanChat | null>(null);
+    const [actionPosition, setActionPosition] = useState({x: 0, y: 0});
     const data = useMemo(() => {
-        const keyword = query.trim().toLocaleLowerCase();
         return chats.filter((chat) => {
             if (filter === '未读' && (chat.lastMessageInfo?.index || 0) <= (chat.lastReadMessageIndex || 0)) return false;
             if (filter === '群聊' && chat.type === 'one2one') return false;
             if (filter === '单聊' && chat.type !== 'one2one') return false;
-            return !keyword || `${chat.name || ''}${messagePreview(chat.lastMessageInfo)}`.toLocaleLowerCase().includes(keyword);
+            return true;
         });
-    }, [chats, filter, query]);
+    }, [chats, filter]);
     const closeMenus = () => {setFilterOpen(false); setAddOpen(false)};
-    const confirmDeleteChat = async () => {
+    const runChatAction = async (action: ConversationAction) => {
         const target = actionChat;
         setActionChat(null);
         if (!target) return;
         try {
-            await deleteChat(target);
+            if (action === 'unread') await markChatUnread(target);
+            if (action === 'star') await setChatStar(target);
+            if (action === 'hide') await hideChat(target);
+            if (action === 'delete') await deleteChat(target);
         } catch (reason) {
-            Alert.alert('删除失败', reason instanceof Error ? reason.message : '无法删除会话');
+            Alert.alert('操作失败', reason instanceof Error ? reason.message : '无法完成会话操作');
         }
     };
 
     return <View style={styles.screen}>
         <SafeAreaView edges={['top']} style={styles.topSafe}>
-            <Header searching={searching} receiving={receiving} query={query} setQuery={setQuery} setSearching={setSearching} openAdd={() => setAddOpen(true)} openAccount={openAccount} />
+            <Header receiving={receiving} openSearch={openSearch} openAdd={() => setAddOpen(true)} openAccount={openAccount} />
         </SafeAreaView>
         <QuickBar filter={filter} openFilter={() => setFilterOpen(true)} />
         {loading && !chats.length
@@ -367,7 +668,10 @@ function MessageScreen({chats, client, loading, refreshing, receiving, unreadCou
             : <FlatList
                 data={data}
                 keyExtractor={(item) => item.gid}
-                renderItem={({item, index}) => <ConversationRow chat={item} index={index} client={client} onPress={() => openChat(item)} onLongPress={() => setActionChat(item)} />}
+                renderItem={({item, index}) => <ConversationRow chat={item} index={index} client={client} selected={actionChat?.gid === item.gid} onPress={() => openChat(item)} onLongPress={(event) => {
+                    setActionPosition({x: event.nativeEvent.pageX, y: event.nativeEvent.pageY});
+                    setActionChat(item);
+                }} />}
                 showsVerticalScrollIndicator
                 contentContainerStyle={[styles.listContent, !data.length && styles.emptyList]}
                 ListEmptyComponent={<Text style={styles.stateText}>暂无消息</Text>}
@@ -375,7 +679,7 @@ function MessageScreen({chats, client, loading, refreshing, receiving, unreadCou
             />}
         <BottomNav active="message" unreadCount={unreadCount} onChange={changeTab} />
         <PopupMenus filterOpen={filterOpen} addOpen={addOpen} filter={filter} close={closeMenus} setFilter={setFilter} />
-        {actionChat && <ConversationActionMenu chat={actionChat} close={() => setActionChat(null)} deleteChat={confirmDeleteChat} />}
+        {actionChat && <ConversationActionMenu position={actionPosition} close={() => setActionChat(null)} onAction={runChatAction} />}
     </View>;
 }
 
@@ -562,6 +866,7 @@ export default function XuanApp() {
     const [members, setMembers] = useState<XuanMember[]>([]);
     const [departments, setDepartments] = useState<XuanDepartment[]>([]);
     const [activeTab, setActiveTab] = useState('message');
+    const [searchOpen, setSearchOpen] = useState(false);
     const [accountOpen, setAccountOpen] = useState(false);
     const [customerContactOpen, setCustomerContactOpen] = useState(false);
     const [previewCustomerContactOpen, setPreviewCustomerContactOpen] = useState(false);
@@ -585,7 +890,10 @@ export default function XuanApp() {
 
     const sortChats = (items: XuanChat[]) => [...items]
         .filter((chat) => !chat.hide && !chat.freeze && !isProtectedDefaultChat(chat))
-        .sort((left, right) => getTimestamp(right.lastMessageInfo?.date || right.lastActiveTime) - getTimestamp(left.lastMessageInfo?.date || left.lastActiveTime));
+        .sort((left, right) => {
+            if (Boolean(left.star) !== Boolean(right.star)) return left.star ? -1 : 1;
+            return getTimestamp(right.lastMessageInfo?.date || right.lastActiveTime) - getTimestamp(left.lastMessageInfo?.date || left.lastActiveTime);
+        });
 
     const loadChats = async (target: XuanClient, refresh = false) => {
         refresh ? setRefreshing(true) : setLoadingChats(true);
@@ -705,6 +1013,10 @@ export default function XuanApp() {
                 setContactDeptStack((stack) => stack.slice(0, -1));
                 return true;
             }
+            if (searchOpen) {
+                setSearchOpen(false);
+                return true;
+            }
             if (activeTab !== 'message') {
                 setActiveTab('message');
                 return true;
@@ -712,7 +1024,7 @@ export default function XuanApp() {
             return false;
         });
         return () => subscription.remove();
-    }, [accountOpen, activeChat, activeMember, activeTab, contactDeptStack.length, customerContactOpen]);
+    }, [accountOpen, activeChat, activeMember, activeTab, contactDeptStack.length, customerContactOpen, searchOpen]);
 
     const openChat = async (chat: XuanChat) => {
         if (!client) return;
@@ -805,6 +1117,17 @@ export default function XuanApp() {
     }
     if (customerContactPreview) {
         return <CustomerContactScreen data={DEFAULT_CUSTOMER_CONTACT_DATA} back={() => {}} openSettings={() => {}} />;
+    }
+    if (messageSearchPreview) {
+        return <MessageSearchScreen
+            chats={searchPreviewChats}
+            members={searchPreviewMembers}
+            departments={searchPreviewDepartments}
+            client={searchPreviewClient}
+            back={() => {}}
+            openChat={() => {}}
+            openMember={() => {}}
+        />;
     }
     if (!client || !session) return <LoginScreen onLogin={handleLogin} initialAccount={lastLogin?.account} />;
     if (customerContactOpen) {
@@ -924,6 +1247,28 @@ export default function XuanApp() {
             updateDeptStack={setContactDeptStack}
         />;
     }
+    if (searchOpen) {
+        return <MessageSearchScreen
+            chats={chats}
+            members={members}
+            departments={departments}
+            client={client}
+            back={() => setSearchOpen(false)}
+            openChat={(chat) => {
+                setSearchOpen(false);
+                void openChat(chat);
+            }}
+            openMember={(member) => {
+                setSearchOpen(false);
+                setContactsError('');
+                if (member.id === session.user.id) {
+                    setAccountOpen(true);
+                } else {
+                    setActiveMember(member);
+                }
+            }}
+        />;
+    }
     return <MessageScreen
         chats={chats}
         client={client}
@@ -933,8 +1278,25 @@ export default function XuanApp() {
         unreadCount={unreadCount}
         refresh={() => loadChats(client, true)}
         openChat={openChat}
+        openSearch={() => {
+            setSearchOpen(true);
+            if (!members.length && !loadingContacts) void loadContacts(client);
+        }}
         deleteChat={async (chat) => {
             await client.deleteChat(chat.gid);
+            setChats((current) => current.filter((item) => item.gid !== chat.gid));
+        }}
+        markChatUnread={async (chat) => {
+            await client.markChatUnread(chat.gid);
+            setChats((current) => current.map((item) => item.gid === chat.gid ? {...item, lastReadMessageIndex: 0} : item));
+        }}
+        setChatStar={async (chat) => {
+            const star = !chat.star;
+            await client.setChatStar(chat.gid, star);
+            setChats((current) => sortChats(current.map((item) => item.gid === chat.gid ? {...item, star} : item)));
+        }}
+        hideChat={async (chat) => {
+            await client.hideChat(chat.gid);
             setChats((current) => current.filter((item) => item.gid !== chat.gid));
         }}
         openAccount={() => {
@@ -966,11 +1328,39 @@ const styles = StyleSheet.create({
     accountButtonOverlay: {position: 'absolute', left: 4, top: 3, width: 42, height: 42, zIndex: 2},
     headerTitle: {position: 'absolute', left: 70, right: 70, color: '#090d11', fontSize: 18, fontWeight: '400', textAlign: 'center'},
     headerActions: {marginLeft: 'auto', flexDirection: 'row', columnGap: 2},
-    newDot: {position: 'absolute', top: 6, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff5659'},
-    searchHeader: {height: 48, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', columnGap: 10, backgroundColor: '#e7f1fd'},
-    searchField: {height: 39, paddingHorizontal: 11, flex: 1, flexDirection: 'row', alignItems: 'center', columnGap: 8, borderRadius: 5, backgroundColor: '#fff'},
-    searchInput: {height: 39, paddingVertical: 0, flex: 1, color: '#1d2227', fontSize: 15},
-    cancel: {height: 39, justifyContent: 'center'},
+    globalSearchScreen: {flex: 1, backgroundColor: '#fff'},
+    globalSearchSafe: {backgroundColor: '#e7f1fd'},
+    globalSearchHeader: {height: 48, paddingRight: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#e7f1fd'},
+    globalSearchBack: {width: 44, height: 48, alignItems: 'center', justifyContent: 'center'},
+    globalSearchInput: {height: 46, minWidth: 0, paddingLeft: 10, paddingRight: 0, paddingVertical: 0, flex: 1, borderWidth: 0, outlineColor: 'transparent', outlineWidth: 0, color: '#161b21', fontSize: 16, fontWeight: '400', backgroundColor: 'transparent'},
+    globalSearchClear: {width: 36, height: 42, alignItems: 'center', justifyContent: 'center'},
+    globalSearchClearIcon: {width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#98a2ae'},
+    globalSearchTabs: {height: 44, paddingLeft: 12, paddingRight: 10, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eceff2', backgroundColor: '#fff'},
+    globalSearchTab: {position: 'relative', minWidth: 0, height: 44, alignItems: 'center', justifyContent: 'center'},
+    globalSearchTabText: {color: '#4e5359', fontSize: 15, fontWeight: '400'},
+    globalSearchTabTextActive: {color: '#0b0e12', fontWeight: '600'},
+    globalSearchIndicator: {position: 'absolute', bottom: 0, width: 26, height: 3, borderRadius: 1.5, backgroundColor: '#3186ef'},
+    globalSearchIdle: {flex: 1, alignItems: 'center'},
+    smartSearchButton: {height: 36, marginTop: 90, paddingLeft: 14, paddingRight: 11, flexDirection: 'row', alignItems: 'center', columnGap: 5, borderRadius: 18, backgroundColor: '#f5f6f7'},
+    smartSearchButtonPressed: {backgroundColor: '#eceeef'},
+    smartSearchIcon: {position: 'relative', width: 20, height: 20, alignItems: 'center', justifyContent: 'center'},
+    smartSearchSparkle: {position: 'absolute', top: -2, right: -2},
+    smartSearchText: {color: '#74787d', fontSize: 14, fontWeight: '400'},
+    globalSearchResults: {paddingBottom: 20, flexGrow: 1, backgroundColor: '#f2f4f9'},
+    globalSearchSection: {height: 40, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: '#fff'},
+    globalSearchSectionSeparated: {height: 46, borderTopWidth: 6, borderTopColor: '#f2f4f9'},
+    globalSearchSectionText: {color: '#666c73', fontSize: 15},
+    globalSearchResultRow: {height: 64, paddingLeft: 16, paddingRight: 14, flexDirection: 'row', alignItems: 'center', columnGap: 13, backgroundColor: '#fff'},
+    globalSearchMessageRow: {height: 64},
+    globalSearchAvatar: {width: 46, height: 46, flexShrink: 0, borderRadius: 5, backgroundColor: '#edf0f2'},
+    globalSearchAvatarText: {color: '#fff', fontSize: 18, fontWeight: '600'},
+    globalSearchResultBody: {height: '100%', minWidth: 0, flex: 1, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eceeef'},
+    globalSearchResultTitleLine: {minWidth: 0, flexDirection: 'row', alignItems: 'center', columnGap: 7},
+    globalSearchResultName: {minWidth: 0, flexShrink: 1, color: '#111418', fontSize: 16, fontWeight: '500', lineHeight: 23},
+    globalSearchResultMeta: {marginTop: 2, color: '#a0a5aa', fontSize: 14, lineHeight: 20},
+    globalSearchGroupBadge: {flexShrink: 0, paddingHorizontal: 5, paddingVertical: 1, color: '#4281d2', fontSize: 11, lineHeight: 16, backgroundColor: '#edf5ff'},
+    globalSearchMatch: {color: '#3b8fca'},
+    globalSearchLoading: {height: 56, alignItems: 'center', justifyContent: 'center'},
     quickBar: {height: 50, paddingHorizontal: 5, flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#edf0f2', backgroundColor: '#f8f9fc'},
     quickItem: {position: 'relative', minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', columnGap: 7},
     quickText: {color: '#67686a', fontSize: 15},
@@ -982,6 +1372,7 @@ const styles = StyleSheet.create({
     emptyList: {flexGrow: 1, alignItems: 'center', justifyContent: 'center'},
     conversation: {height: 60, paddingLeft: 14, paddingRight: 12, flexDirection: 'row', alignItems: 'center', columnGap: 12, backgroundColor: '#fff'},
     rowPressed: {backgroundColor: '#f4f5f6'},
+    rowSelected: {backgroundColor: '#e7e7e7'},
     avatar: {width: 40, height: 40, flexShrink: 0, borderRadius: 5, backgroundColor: '#edf0f2'},
     fallbackAvatar: {alignItems: 'center', justifyContent: 'center'},
     fallbackAvatarText: {color: '#fff', fontSize: 17, fontWeight: '600'},
@@ -996,7 +1387,7 @@ const styles = StyleSheet.create({
     bottomSafe: {paddingBottom: Platform.OS === 'web' ? 14 : 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#e6e7e9', backgroundColor: '#fafbfd'},
     bottomNav: {height: 56, paddingTop: 4, flexDirection: 'row', backgroundColor: '#fafbfd'},
     bottomItem: {minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'center', rowGap: 2},
-    bottomIconWrap: {position: 'relative', width: 28, height: 28},
+    bottomIconWrap: {position: 'relative', width: 34, height: 28, alignItems: 'center', justifyContent: 'center'},
     bottomUnreadBadge: {position: 'absolute', top: -6, right: -5, minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fafbfd', borderRadius: 9, backgroundColor: '#fa5151'},
     bottomUnreadBadgeText: {color: '#fff', fontSize: 10, fontWeight: '600', lineHeight: 13},
     bottomLabel: {color: '#5d6369', fontSize: 11, lineHeight: 16},
@@ -1009,13 +1400,13 @@ const styles = StyleSheet.create({
     addRow: {position: 'relative', height: 55, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', columnGap: 13},
     addMenuText: {color: '#3974e8', fontSize: 16},
     addDivider: {position: 'absolute', right: 14, bottom: 0, left: 53, height: StyleSheet.hairlineWidth, backgroundColor: '#eceff3'},
-    addItemDot: {position: 'absolute', top: 23, right: 15, width: 9, height: 9, borderRadius: 4.5, backgroundColor: '#ff5659'},
     menuText: {color: '#30353a', fontSize: 15},
-    conversationMenuScrim: {flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)'},
-    conversationMenu: {width: 220, overflow: 'hidden', borderRadius: 8, backgroundColor: '#fff', elevation: 8, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: {width: 0, height: 5}},
-    conversationMenuTitle: {paddingHorizontal: 18, paddingTop: 17, paddingBottom: 13, color: '#858b91', fontSize: 13, textAlign: 'center'},
-    conversationMenuRow: {height: 51, alignItems: 'center', justifyContent: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#eceef0'},
-    conversationMenuDelete: {color: '#e04444', fontSize: 17},
+    conversationMenuScrim: {flex: 1, backgroundColor: 'transparent'},
+    conversationMenu: {position: 'absolute', width: 132, overflow: 'hidden', borderRadius: 8, backgroundColor: '#fff', elevation: 9, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 11, shadowOffset: {width: 0, height: 4}},
+    conversationMenuRow: {position: 'relative', height: 48, paddingHorizontal: 16, justifyContent: 'center'},
+    conversationMenuRowPressed: {backgroundColor: '#f2f3f5'},
+    conversationMenuText: {color: '#111315', fontSize: 16, lineHeight: 22},
+    conversationMenuDivider: {position: 'absolute', right: 12, bottom: 0, left: 12, height: StyleSheet.hairlineWidth, backgroundColor: '#eceef0'},
     chatScreen: {flex: 1, backgroundColor: '#ecedf1'},
     chatTopSafe: {backgroundColor: '#ecedf1'},
     chatHeader: {height: 48, paddingHorizontal: 7, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#dfe0e4', backgroundColor: '#ecedf1'},
@@ -1070,3 +1461,4 @@ const styles = StyleSheet.create({
     attachmentPageDot: {width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#d7d9dd'},
     attachmentPageDotActive: {backgroundColor: '#8d9095'},
 });
+
