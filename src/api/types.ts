@@ -79,6 +79,8 @@ export type XuanChat = {
     lastMessage?: number;
     lastMessageInfo?: XuanMessage | null;
     lastReadMessageIndex?: number;
+    star?: boolean;
+    mute?: boolean;
     freeze?: boolean;
     hide?: boolean;
 };
@@ -133,3 +135,4 @@ export type XuanCustomerContactData = XuanWorkbenchStats & {
     weeklyOnlineRevenue: number;
     weeklyOfflineRevenue: number;
 };
+
