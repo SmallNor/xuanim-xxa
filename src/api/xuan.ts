@@ -159,6 +159,15 @@ const normalizeMember = (member: XuanMember): XuanMember => {
     };
 };
 
+const normalizeMembers = (value: unknown): XuanMember[] => {
+    const members = Array.isArray(value)
+        ? value
+        : value && typeof value === 'object' ? Object.values(value) : [];
+    return members
+        .filter((member): member is XuanMember => !!member && typeof member === 'object' && Number((member as XuanMember).id) > 0)
+        .map(normalizeMember);
+};
+
 const getPeerMemberID = (chat: XuanChat, currentUserID: number) => {
     const memberID = (Array.isArray(chat.members) ? chat.members : [])
         .map(Number)
@@ -476,9 +485,31 @@ export class XuanClient {
         await this.request('chatFreeze', [true, cgid]);
     }
 
+    async setChatStar(cgid: string, star: boolean): Promise<void> {
+        await this.request('chatStar', [star, cgid]);
+    }
+
+    async markChatUnread(cgid: string): Promise<void> {
+        await this.request('chatSetLastReadMessageByIndex', [cgid, 0]);
+    }
+
+    async hideChat(cgid: string): Promise<void> {
+        await this.request('chatHide', [true, cgid]);
+    }
+
     async getMembers(memberIDs: number[] = []): Promise<XuanMember[]> {
-        const members = await this.request<XuanMember[]>('userGetList', [memberIDs]);
-        return (Array.isArray(members) ? members : []).map(normalizeMember);
+        return normalizeMembers(await this.request<unknown>('userGetList', [memberIDs]));
+    }
+
+    async searchMembers(search: string): Promise<XuanMember[]> {
+        const keyword = search.trim();
+        if (!keyword) return [];
+        const pager = {pageID: 1, recPerPage: 50, recTotal: 0};
+        return normalizeMembers(await this.request<unknown>('userSearch', [
+            keyword,
+            {dept: 0, limit: 50, ...pager, pager},
+            false,
+        ]));
     }
 
     async getChatMembers(gid: string): Promise<XuanMember[]> {
@@ -519,8 +550,7 @@ export class XuanClient {
             .map(Number)
             .filter((id) => Number.isInteger(id) && id > 0);
         if (!ids.length) return [];
-        const members = await this.request<XuanMember[]>('userGetList', [ids]);
-        return (Array.isArray(members) ? members : []).map(normalizeMember);
+        return normalizeMembers(await this.request<unknown>('userGetList', [ids]));
     }
 
     async getDepartments(): Promise<XuanDepartment[]> {
@@ -910,3 +940,4 @@ export async function loginXuan(serverInput: string, accountInput: string, passw
 
 export {normalizeMessages};
 export type {XuanAvatarUpload, XuanChat, XuanCustomerContactData, XuanDepartment, XuanMember, XuanMessage, XuanPacket, XuanProfileUpdate, XuanSession, XuanWorkbenchStats};
+
