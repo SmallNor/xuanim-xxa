@@ -3,7 +3,6 @@ import {
     ActivityIndicator, Alert, Modal, Platform, Pressable,
     StyleSheet, Text, View,
 } from 'react-native';
-import {Download, RefreshCw} from 'lucide-react-native';
 import appConfig from '../../app.json';
 import nativeAppUpdate, {CurrentVersion, DownloadProgress} from '../../modules/app-update';
 
@@ -201,6 +200,7 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
             : status === 'error' && !latestVersion
                 ? '\u91cd\u65b0\u68c0\u67e5'
                 : '\u7acb\u5373\u66f4\u65b0';
+    const updateMessage = '\u4f18\u5316\u7528\u6237\u4f53\u9a8c\uff0c\u4fee\u590d\u5df2\u77e5\u95ee\u9898\n\u70b9\u51fb\u201c\u7acb\u5373\u66f4\u65b0\u201d\uff0c\u4e0b\u8f7d\u5e76\u5b89\u88c5\u65b0\u7248\u672c';
 
     return <AppUpdateContext.Provider value={contextValue}>
         {children}
@@ -216,10 +216,11 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
             <View style={styles.scrim}>
                 <View style={styles.card}>
                     <Text style={styles.title}>{'\u53d1\u73b0\u65b0\u7248\u672c'}</Text>
-                    <Text style={styles.version}>
-                        v{currentVersion.versionName} {'\u2192'} v{latestVersion?.versionName || ''}
-                    </Text>
-                    {!!latestVersion?.releaseNotes && <Text style={styles.notes}>{latestVersion.releaseNotes}</Text>}
+                    {latestVersion
+                        ? <Text style={styles.updateMessage}>{updateMessage}</Text>
+                        : <Text style={styles.version}>
+                            v{currentVersion.versionName}
+                        </Text>}
                     {downloading && <View style={styles.progressArea}>
                         <View style={styles.progressTrack}>
                             <View style={[styles.progressFill, {width: `${progress}%`}]} />
@@ -230,18 +231,15 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
                     {!!error && <Text style={styles.error}>{error}</Text>}
                     <View style={styles.actions}>
                         {canDismiss && <Pressable style={styles.secondaryButton} onPress={() => setModalVisible(false)}>
-                            <Text style={styles.secondaryText}>{'\u7a0d\u540e'}</Text>
+                            <Text style={styles.secondaryText}>{latestVersion ? '\u5ffd\u7565' : '\u7a0d\u540e'}</Text>
                         </Pressable>}
+                        {canDismiss && <View style={styles.actionDivider} />}
                         <Pressable
                             style={({pressed}) => [styles.primaryButton, pressed && !downloading && styles.primaryPressed]}
                             onPress={() => status === 'error' && !latestVersion ? void check(true) : void downloadAndInstall()}
                             disabled={downloading}
                         >
-                            {downloading
-                                ? <ActivityIndicator size="small" color="#fff" />
-                                : status === 'error' && !latestVersion
-                                    ? <RefreshCw size={17} color="#fff" strokeWidth={2} />
-                                    : <Download size={17} color="#fff" strokeWidth={2} />}
+                            {downloading && <ActivityIndicator size="small" color="#287dd7" />}
                             <Text style={styles.primaryText}>{downloading ? `\u6b63\u5728\u4e0b\u8f7d ${progress}%` : primaryLabel}</Text>
                         </Pressable>
                     </View>
@@ -254,23 +252,24 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
 export const useAppUpdate = () => useContext(AppUpdateContext);
 
 const styles = StyleSheet.create({
-    scrim: {flex: 1, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.42)'},
-    card: {width: '100%', maxWidth: 360, padding: 22, borderRadius: 8, backgroundColor: '#fff'},
-    title: {color: '#11151a', fontSize: 19, fontWeight: '600'},
-    version: {marginTop: 8, color: '#287dd7', fontSize: 15, fontWeight: '500'},
-    notes: {marginTop: 16, color: '#4d535a', fontSize: 15, lineHeight: 22},
+    scrim: {flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.56)'},
+    card: {width: '76%', maxWidth: 360, overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff'},
+    title: {paddingTop: 27, paddingHorizontal: 14, color: '#11151a', fontSize: 20, fontWeight: '500', lineHeight: 27, textAlign: 'center'},
+    version: {marginTop: 8, color: '#287dd7', fontSize: 15, fontWeight: '500', textAlign: 'center'},
+    updateMessage: {paddingHorizontal: 20, paddingTop: 10, paddingBottom: 25, color: '#858585', fontSize: 16, lineHeight: 24, textAlign: 'center'},
     hint: {marginTop: 14, color: '#666c73', fontSize: 14, lineHeight: 20},
     error: {marginTop: 14, color: '#c83f3a', fontSize: 14, lineHeight: 20},
     progressArea: {marginTop: 18, flexDirection: 'row', alignItems: 'center', columnGap: 10},
     progressTrack: {height: 6, flex: 1, overflow: 'hidden', borderRadius: 3, backgroundColor: '#e8ebef'},
     progressFill: {height: 6, borderRadius: 3, backgroundColor: '#287dd7'},
     progressText: {width: 40, color: '#555b62', fontSize: 13, textAlign: 'right'},
-    actions: {marginTop: 22, flexDirection: 'row', justifyContent: 'flex-end', columnGap: 10},
-    secondaryButton: {height: 42, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center'},
-    secondaryText: {color: '#5c6269', fontSize: 15, fontWeight: '500'},
-    primaryButton: {minWidth: 126, height: 42, paddingHorizontal: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', columnGap: 7, borderRadius: 5, backgroundColor: '#287dd7'},
-    primaryPressed: {opacity: 0.84},
-    primaryText: {color: '#fff', fontSize: 15, fontWeight: '600'},
+    actions: {height: 54, flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#e4e6e8'},
+    actionDivider: {width: StyleSheet.hairlineWidth, backgroundColor: '#e4e6e8'},
+    secondaryButton: {height: 54, flex: 1, alignItems: 'center', justifyContent: 'center'},
+    secondaryText: {color: '#111315', fontSize: 18, fontWeight: '400'},
+    primaryButton: {height: 54, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', columnGap: 7},
+    primaryPressed: {backgroundColor: '#f4f7fb'},
+    primaryText: {color: '#287dd7', fontSize: 18, fontWeight: '500'},
     toastHost: {position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center'},
     toast: {maxWidth: '82%', paddingHorizontal: 29, paddingVertical: 14, borderRadius: 22, backgroundColor: '#656565'},
     toastText: {color: '#fff', fontSize: 18, lineHeight: 25, textAlign: 'center'},
