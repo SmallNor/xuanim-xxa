@@ -210,6 +210,7 @@ export class XuanClient {
     private reconnectAttempts = 0;
     private sessionID = '';
     private readonly serverTimeOffset: number;
+    private contactScope?: Promise<{ok: boolean; userIds: number[]; departments: XuanDepartment[]}>;
 
     constructor(server: string, account: string, passwordHash: string, info: XuanServerInfo) {
         this.server = server;
@@ -497,19 +498,89 @@ export class XuanClient {
         await this.request('chatHide', [true, cgid]);
     }
 
+    private getContactScope() {
+        if (!this.contactScope) {
+            this.contactScope = this.fetchContactScope().finally(() => {
+                queueMicrotask(() => { this.contactScope = undefined; });
+            });
+        }
+        return this.contactScope;
+    }
+
+    private httpAuthParams() {
+        let authToken = this.info.authToken || this.passwordHash;
+        if (this.info.authToken) {
+            if (authToken.length === 64) {
+                const window = this.info.authTokenAuthWindow || 20;
+                authToken = md5(`${this.account}${authToken}${Math.round((Date.now() + this.serverTimeOffset) / 1000 / window)}`);
+            } else if (authToken.length >= 32) {
+                authToken = authToken.substring(0, 32);
+            }
+            authToken += md5(authToken);
+        }
+        return {
+            auth_account: this.account,
+            auth_token: authToken,
+            auth_device: 'mobile',
+        };
+    }
+
+    private async fetchContactScope(): Promise<{ok: boolean; userIds: number[]; departments: XuanDepartment[]}> {
+        const empty = {ok: false, userIds: [] as number[], departments: [] as XuanDepartment[]};
+        if (!this.info.backendURL) return empty;
+        try {
+            const backend = new URL(this.info.backendURL, this.serverRoot);
+            const server = new URL(this.server);
+            if (['127.0.0.1', 'localhost', '::1'].includes(backend.hostname)) {
+                backend.hostname = server.hostname;
+            }
+            backend.pathname = backend.pathname.endsWith('/') ? backend.pathname + 'index.php' : backend.pathname + '/index.php';
+            backend.search = '';
+            backend.hash = '';
+            backend.searchParams.set('m', 'im');
+            backend.searchParams.set('f', 'contacts');
+            Object.entries(this.httpAuthParams()).forEach(([key, value]) => backend.searchParams.set(key, value));
+            const response = await fetch(backend.toString(), {headers: {Accept: 'application/json'}});
+            if (!response.ok) return empty;
+            const result = await response.json() as {result?: string; users?: unknown; depts?: Record<string, Omit<XuanDepartment, 'id'>>};
+            if (result.result !== 'success') return empty;
+            const userIds = (Array.isArray(result.users) ? result.users : [])
+                .map(Number)
+                .filter((id) => Number.isInteger(id) && id > 0);
+            const departments = Object.entries(result.depts || {})
+                .map(([id, department]) => ({...department, id: Number(id)}))
+                .sort((left, right) => (left.order || 0) - (right.order || 0) || left.id - right.id);
+            return {ok: true, userIds, departments};
+        } catch {
+            return empty;
+        }
+    }
+
     async getMembers(memberIDs: number[] = []): Promise<XuanMember[]> {
-        return normalizeMembers(await this.request<unknown>('userGetList', [memberIDs]));
+        let ids = (Array.isArray(memberIDs) ? memberIDs : [])
+            .map(Number)
+            .filter((id) => Number.isInteger(id) && id > 0);
+        if (!ids.length) {
+            const scoped = await this.getContactScope();
+            ids = scoped.ok ? scoped.userIds : [];
+            if (!ids.length) return [];
+        }
+        return normalizeMembers(await this.request<unknown>('userGetList', [ids]));
     }
 
     async searchMembers(search: string): Promise<XuanMember[]> {
         const keyword = search.trim();
         if (!keyword) return [];
         const pager = {pageID: 1, recPerPage: 50, recTotal: 0};
-        return normalizeMembers(await this.request<unknown>('userSearch', [
+        const results = normalizeMembers(await this.request<unknown>('userSearch', [
             keyword,
             {dept: 0, limit: 50, ...pager, pager},
             false,
         ]));
+        const scoped = await this.getContactScope();
+        if (!scoped.ok) return [];
+        const allowed = new Set(scoped.userIds);
+        return results.filter((member) => allowed.has(member.id));
     }
 
     async getChatMembers(gid: string): Promise<XuanMember[]> {
@@ -550,19 +621,32 @@ export class XuanClient {
             .map(Number)
             .filter((id) => Number.isInteger(id) && id > 0);
         if (!ids.length) return [];
-        return normalizeMembers(await this.request<unknown>('userGetList', [ids]));
+        const members = normalizeMembers(await this.request<unknown>('userGetList', [ids]));
+        const scoped = await this.getContactScope();
+        if (!scoped.ok) return [];
+        const allowed = new Set(scoped.userIds);
+        return members.filter((member) => allowed.has(member.id));
     }
 
     async getDepartments(): Promise<XuanDepartment[]> {
-        const response = await this.request<{depts?: Record<string, Omit<XuanDepartment, 'id'>>}>('sysGetDepts');
-        return Object.entries(response?.depts || {})
-            .map(([id, department]) => ({...department, id: Number(id)}))
-            .sort((left, right) => (left.order || 0) - (right.order || 0) || left.id - right.id);
+        const scoped = await this.getContactScope();
+        if (scoped.ok) return scoped.departments;
+        return [];
     }
 
     async getWorkbenchStats(): Promise<XuanWorkbenchStats> {
+        if (this.user.admin !== 'super' && this.user.admin !== 'common') {
+            throw new Error('当前账号没有工作台权限');
+        }
+        if (!this.info.authToken) {
+            throw new Error('工作台登录凭证不可用');
+        }
         const response = await fetch(`${this.serverRoot}workbenchStats`, {
-            headers: {Accept: 'application/json', Authorization: this.info.token},
+            headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${this.info.authToken}`,
+                'X-Account': this.account,
+            },
         });
         const text = await response.text();
         let result: {result?: string; message?: string; data?: unknown};
@@ -940,4 +1024,3 @@ export async function loginXuan(serverInput: string, accountInput: string, passw
 
 export {normalizeMessages};
 export type {XuanAvatarUpload, XuanChat, XuanCustomerContactData, XuanDepartment, XuanMember, XuanMessage, XuanPacket, XuanProfileUpdate, XuanSession, XuanWorkbenchStats};
-
