@@ -2,7 +2,7 @@
   "expo": {
     "name": "企业微信",
     "slug": "xuan-mobile",
-    "version": "1.0.8",
+    "version": "1.0.12",
     "orientation": "portrait",
     "icon": "./assets/wecom-icon.png",
     "splash": {
@@ -26,7 +26,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": false,
       "package": "com.xxa.xuanim",
-      "versionCode": 9
+      "versionCode": 13
     },
     "web": {
       "favicon": "./assets/wecom-favicon.png"
@@ -51,4 +51,3 @@
     ]
   }
 }
-
