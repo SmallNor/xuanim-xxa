@@ -113,6 +113,7 @@ export default function AccountScreen({
     const department = departments.find((item) => item.id === Number(member.dept || 0));
     const companyName = company?.trim() || '\u4f01\u4e1a\u901a\u8baf\u5f55';
     const genderText = member.gender === 'm' ? '\u7537' : member.gender === 'f' ? '\u5973' : '\u672a\u8bbe\u7f6e';
+    const showCustomerContact = member.admin === 'super' || member.admin === 'common';
 
     useEffect(() => {
         if (!editing) {
@@ -198,6 +199,8 @@ export default function AccountScreen({
             setError(`\u5f53\u524d\u670d\u52a1\u5668\u4e0d\u652f\u6301\u6e05\u7a7a${clearing.label}\uff0c\u53ef\u4ee5\u4fee\u6539\u4e3a\u65b0\u7684\u5185\u5bb9`);
             return;
         }
+        let nextCustomerContactData: XuanCustomerContactData | null = null;
+        if (showCustomerContact) {
         if (customerContactDraft.businessCategory.trim().length > 30) {
             setError('\u7ecf\u8425\u7c7b\u76ee\u4e0d\u80fd\u8d85\u8fc730\u4e2a\u5b57');
             return;
@@ -230,7 +233,7 @@ export default function AccountScreen({
             setError('\u672c\u5468\u4e1a\u7ee9\u5fc5\u987b\u662f0-999999999999.99\u7684\u91d1\u989d');
             return;
         }
-        const nextCustomerContactData: XuanCustomerContactData = {
+        nextCustomerContactData = {
             externalContactScale,
             businessCategory: customerContactDraft.businessCategory.trim() || '\u672a\u77e5',
             customerTotal,
@@ -239,13 +242,16 @@ export default function AccountScreen({
             weeklyOnlineRevenue: Math.round(weeklyOnlineRevenue * 100) / 100,
             weeklyOfflineRevenue: Math.round(weeklyOfflineRevenue * 100) / 100,
         };
+        }
         setSaving(true);
         setError('');
         try {
             const updated = await save(update, avatarDraft || undefined);
-            await saveCustomerContactData(nextCustomerContactData);
+            if (nextCustomerContactData) {
+                await saveCustomerContactData(nextCustomerContactData);
+                setCustomerContactDraft(makeCustomerContactDraft(nextCustomerContactData));
+            }
             setDraft(makeDraft(updated));
-            setCustomerContactDraft(makeCustomerContactDraft(nextCustomerContactData));
             setAvatarDraft(null);
             setEditing(false);
         } catch (reason) {
@@ -339,7 +345,7 @@ export default function AccountScreen({
                 <ProfileRow label={'\u5730\u5740'} value={member.address || ''} last />
             </View>}
 
-            {editing ? <View style={styles.card}>
+            {showCustomerContact && (editing ? <View style={styles.card}>
                 <EditField label={'\u5916\u90e8\u8054\u7cfb\u4eba\u89c4\u6a21'} value={customerContactDraft.externalContactScale} onChangeText={(value) => updateCustomerContactDraft('externalContactScale', value)} placeholder={'\u8bf7\u8f93\u5165\u89c4\u6a21'} keyboardType="numeric" />
                 <EditField label={'\u7ecf\u8425\u7c7b\u76ee'} value={customerContactDraft.businessCategory} onChangeText={(value) => updateCustomerContactDraft('businessCategory', value)} placeholder={'\u8bf7\u8f93\u5165\u7ecf\u8425\u7c7b\u76ee'} />
                 <EditField label={'\u5ba2\u6237\u603b\u6570'} value={customerContactDraft.customerTotal} onChangeText={(value) => updateCustomerContactDraft('customerTotal', value)} placeholder={'\u8bf7\u8f93\u5165\u5ba2\u6237\u603b\u6570'} keyboardType="numeric" />
@@ -355,7 +361,7 @@ export default function AccountScreen({
                 <ProfileRow label={'\u4eca\u65e5\u6536\u6b3e'} value={`\u00a5${customerContactData.todayPayment.toFixed(2)}`} />
                 <ProfileRow label={'\u672c\u5468\u7ebf\u4e0a'} value={`\u00a5${customerContactData.weeklyOnlineRevenue.toFixed(2)}`} />
                 <ProfileRow label={'\u672c\u5468\u7ebf\u4e0b'} value={`\u00a5${customerContactData.weeklyOfflineRevenue.toFixed(2)}`} last />
-            </View>}
+            </View>)}
 
             <View style={styles.card}>
                 <ProfileRow label={'\u90e8\u95e8'} value={department?.name || '\u672a\u8bbe\u7f6e'} />
@@ -471,4 +477,3 @@ const styles = StyleSheet.create({
     cancelText: {color: '#43494f', fontSize: 16},
     confirmLogoutText: {color: '#d64c46', fontSize: 16, fontWeight: '500'},
 });
-
