@@ -24,6 +24,7 @@ export type XuanMember = {
     status?: string;
     dept?: number;
     role?: string;
+    admin?: string;
     email?: string;
     mobile?: string;
     phone?: string;
@@ -115,6 +116,9 @@ export type XuanServerInfo = {
     apiScheme: MappingScheme;
     version: string;
     company?: string;
+    permissions?: {
+        workbench?: boolean;
+    };
 };
 
 export type XuanSession = {
@@ -135,4 +139,3 @@ export type XuanCustomerContactData = XuanWorkbenchStats & {
     weeklyOnlineRevenue: number;
     weeklyOfflineRevenue: number;
 };
-
