@@ -1,6 +1,6 @@
 import {createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
 import {
-    ActivityIndicator, Alert, Modal, Platform, Pressable,
+    ActivityIndicator, Alert, Linking, Modal, Platform, Pressable,
     StyleSheet, Text, View,
 } from 'react-native';
 import appConfig from '../../app.json';
@@ -41,6 +41,7 @@ const AppUpdateContext = createContext<AppUpdateContextValue>({
 });
 
 const updateManifestUrl = appConfig.expo.extra.androidUpdateManifestUrl;
+const signatureMismatchMessage = '\u5f53\u524d\u5b89\u88c5\u7248\u672c\u4e0e\u5b98\u65b9\u7248\u672c\u7b7e\u540d\u4e0d\u4e00\u81f4\uff0c\u65e0\u6cd5\u76f4\u63a5\u8986\u76d6\u66f4\u65b0\u3002\u8bf7\u5148\u5907\u4efd\u91cd\u8981\u6570\u636e\uff0c\u5378\u8f7d\u5f53\u524d\u5e94\u7528\uff0c\u518d\u4ece\u5b98\u65b9\u5730\u5740\u5b89\u88c5\u6700\u65b0\u7248\u3002';
 
 function validateManifest(value: unknown): AndroidUpdateManifest {
     if (!value || typeof value !== 'object') throw new Error('\u66f4\u65b0\u4fe1\u606f\u683c\u5f0f\u4e0d\u6b63\u786e');
@@ -75,6 +76,7 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
     const [status, setStatus] = useState<UpdateStatus>('idle');
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState('');
+    const [signatureMismatch, setSignatureMismatch] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,6 +110,7 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
         if (status === 'downloading') return;
         setStatus('checking');
         setError('');
+        setSignatureMismatch(false);
         try {
             const [installed, manifest] = await Promise.all([
                 nativeAppUpdate.getCurrentVersion(),
@@ -166,6 +169,7 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
         setStatus('downloading');
         setProgress(0);
         setError('');
+        setSignatureMismatch(false);
         try {
             await nativeAppUpdate.downloadApk(
                 latestVersion.apkUrl,
@@ -176,8 +180,20 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
             setStatus('ready');
             await openInstaller();
         } catch (caught) {
-            setError(caught instanceof Error ? caught.message : 'APK \u4e0b\u8f7d\u5931\u8d25');
+            const message = caught instanceof Error ? caught.message : 'APK \u4e0b\u8f7d\u5931\u8d25';
+            const mismatched = /signature does not match the installed app/i.test(message);
+            setSignatureMismatch(mismatched);
+            setError(mismatched ? signatureMismatchMessage : message);
             setStatus('error');
+        }
+    };
+
+    const openBrowserDownload = async () => {
+        if (!latestVersion) return;
+        try {
+            await Linking.openURL(latestVersion.apkUrl);
+        } catch {
+            setError('\u65e0\u6cd5\u6253\u5f00\u6d4f\u89c8\u5668\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002');
         }
     };
 
@@ -192,8 +208,10 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
     }), [currentVersion.versionName, latestVersion, manualCheck, progress, status, supported]);
 
     const downloading = status === 'downloading';
-    const canDismiss = !latestVersion?.forceUpdate && !downloading;
-    const primaryLabel = status === 'ready'
+    const canDismiss = signatureMismatch || (!latestVersion?.forceUpdate && !downloading);
+    const primaryLabel = signatureMismatch
+        ? '\u6d4f\u89c8\u5668\u4e0b\u8f7d'
+        : status === 'ready'
         ? '\u7ee7\u7eed\u5b89\u88c5'
         : status === 'installing'
             ? '\u91cd\u65b0\u6253\u5f00\u5b89\u88c5\u9875'
@@ -215,9 +233,9 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
         >
             <View style={styles.scrim}>
                 <View style={styles.card}>
-                    <Text style={styles.title}>{'\u53d1\u73b0\u65b0\u7248\u672c'}</Text>
+                    <Text style={styles.title}>{signatureMismatch ? '\u65e0\u6cd5\u8986\u76d6\u5b89\u88c5' : '\u53d1\u73b0\u65b0\u7248\u672c'}</Text>
                     {latestVersion
-                        ? <Text style={styles.updateMessage}>{updateMessage}</Text>
+                        ? <Text style={[styles.updateMessage, downloading && styles.downloadingMessage]}>{signatureMismatch ? signatureMismatchMessage : updateMessage}</Text>
                         : <Text style={styles.version}>
                             v{currentVersion.versionName}
                         </Text>}
@@ -228,19 +246,21 @@ export function AppUpdateProvider({children}: {children: ReactNode}) {
                         <Text style={styles.progressText}>{progress}%</Text>
                     </View>}
                     {status === 'installing' && <Text style={styles.hint}>{'\u5b89\u88c5\u9875\u5df2\u6253\u5f00\uff0c\u8bf7\u5728\u7cfb\u7edf\u9875\u9762\u786e\u8ba4\u5b89\u88c5\u3002'}</Text>}
-                    {!!error && <Text style={styles.error}>{error}</Text>}
+                    {!!error && (!signatureMismatch || error !== signatureMismatchMessage) && <Text style={styles.error}>{error}</Text>}
                     <View style={styles.actions}>
                         {canDismiss && <Pressable style={styles.secondaryButton} onPress={() => setModalVisible(false)}>
-                            <Text style={styles.secondaryText}>{latestVersion ? '\u5ffd\u7565' : '\u7a0d\u540e'}</Text>
+                            <Text style={styles.secondaryText}>{signatureMismatch ? '\u5173\u95ed' : latestVersion ? '\u5ffd\u7565' : '\u7a0d\u540e'}</Text>
                         </Pressable>}
                         {canDismiss && <View style={styles.actionDivider} />}
                         <Pressable
                             style={({pressed}) => [styles.primaryButton, pressed && !downloading && styles.primaryPressed]}
-                            onPress={() => status === 'error' && !latestVersion ? void check(true) : void downloadAndInstall()}
+                            onPress={() => signatureMismatch
+                                ? void openBrowserDownload()
+                                : status === 'error' && !latestVersion ? void check(true) : void downloadAndInstall()}
                             disabled={downloading}
                         >
                             {downloading && <ActivityIndicator size="small" color="#287dd7" />}
-                            <Text style={styles.primaryText}>{downloading ? `\u6b63\u5728\u4e0b\u8f7d ${progress}%` : primaryLabel}</Text>
+                            <Text style={styles.primaryText}>{downloading ? '\u6b63\u5728\u4e0b\u8f7d' : primaryLabel}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -257,9 +277,10 @@ const styles = StyleSheet.create({
     title: {paddingTop: 27, paddingHorizontal: 14, color: '#11151a', fontSize: 20, fontWeight: '500', lineHeight: 27, textAlign: 'center'},
     version: {marginTop: 8, color: '#287dd7', fontSize: 15, fontWeight: '500', textAlign: 'center'},
     updateMessage: {paddingHorizontal: 20, paddingTop: 10, paddingBottom: 25, color: '#858585', fontSize: 16, lineHeight: 24, textAlign: 'center'},
+    downloadingMessage: {paddingBottom: 16},
     hint: {marginTop: 14, color: '#666c73', fontSize: 14, lineHeight: 20},
     error: {marginTop: 14, color: '#c83f3a', fontSize: 14, lineHeight: 20},
-    progressArea: {marginTop: 18, flexDirection: 'row', alignItems: 'center', columnGap: 10},
+    progressArea: {marginTop: 12, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', columnGap: 10},
     progressTrack: {height: 6, flex: 1, overflow: 'hidden', borderRadius: 3, backgroundColor: '#e8ebef'},
     progressFill: {height: 6, borderRadius: 3, backgroundColor: '#287dd7'},
     progressText: {width: 40, color: '#555b62', fontSize: 13, textAlign: 'right'},
