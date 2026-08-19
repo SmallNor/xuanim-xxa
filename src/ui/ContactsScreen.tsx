@@ -200,7 +200,7 @@ export default function ContactsScreen({
                         <View style={[styles.contactBody, inDepartment && styles.departmentContactBody]}>
                             <View style={styles.contactText}>
                                 <Text numberOfLines={1} style={[styles.contactName, inDepartment && styles.departmentContactName]}>{memberName(item)}</Text>
-                                {!inDepartment && <Text numberOfLines={1} style={styles.contactMeta}>{department?.name || item.account}</Text>}
+                                {!inDepartment && !!department?.name && <Text numberOfLines={1} style={styles.contactMeta}>{department.name}</Text>}
                             </View>
 
                         </View>
