@@ -531,8 +531,8 @@ function MessageSearchScreen({chats, members, departments, client, openChat, ope
     </View>;
 }
 
-function BottomNav({active, unreadCount, contactsCount = 0, onChange}: {
-    active: string; unreadCount: number; contactsCount?: number; onChange: (tab: string) => void;
+function BottomNav({active, unreadCount, contactsCount = 0, workbenchEnabled = true, onChange}: {
+    active: string; unreadCount: number; contactsCount?: number; workbenchEnabled?: boolean; onChange: (tab: string) => void;
 }) {
     return <SafeAreaView edges={['bottom']} style={styles.bottomSafe}><View style={styles.bottomNav}>
         {bottomTabs.map(({key, label, icon: Icon}) => {
@@ -621,10 +621,10 @@ function ConversationActionMenu({position, close, onAction}: {
     </Modal>;
 }
 
-function MessageScreen({chats, client, loading, refreshing, receiving, unreadCount, refresh, openChat, openSearch, openAccount, changeTab, deleteChat, markChatUnread, setChatStar, hideChat}: {
+function MessageScreen({chats, client, loading, refreshing, receiving, unreadCount, workbenchEnabled, refresh, openChat, openSearch, openAccount, changeTab, deleteChat, markChatUnread, setChatStar, hideChat}: {
     chats: XuanChat[]; client: XuanClient; loading: boolean; refreshing: boolean; receiving: boolean;
     unreadCount: number;
-    refresh: () => void; openChat: (chat: XuanChat) => void; openSearch: () => void; openAccount: () => void; changeTab: (tab: string) => void;
+    workbenchEnabled: boolean; refresh: () => void; openChat: (chat: XuanChat) => void; openSearch: () => void; openAccount: () => void; changeTab: (tab: string) => void;
     deleteChat: (chat: XuanChat) => Promise<void>;
     markChatUnread: (chat: XuanChat) => Promise<void>;
     setChatStar: (chat: XuanChat) => Promise<void>;
@@ -677,7 +677,7 @@ function MessageScreen({chats, client, loading, refreshing, receiving, unreadCou
                 ListEmptyComponent={<Text style={styles.stateText}>暂无消息</Text>}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor="#287dd7" colors={['#287dd7']} />}
             />}
-        <BottomNav active="message" unreadCount={unreadCount} onChange={changeTab} />
+        <BottomNav active="message" unreadCount={unreadCount} workbenchEnabled={workbenchEnabled} onChange={changeTab} />
         <PopupMenus filterOpen={filterOpen} addOpen={addOpen} filter={filter} close={closeMenus} setFilter={setFilter} />
         {actionChat && <ConversationActionMenu position={actionPosition} close={() => setActionChat(null)} onAction={runChatAction} />}
     </View>;
@@ -887,6 +887,7 @@ export default function XuanApp() {
     const [customerContactData, setCustomerContactData] = useState<XuanCustomerContactData>(DEFAULT_CUSTOMER_CONTACT_DATA);
     const activeChatGid = useRef<string | null>(null);
     const unreadCount = chats.reduce((total, chat) => total + getUnreadCount(chat), 0);
+    const workbenchEnabled = client?.user?.admin === 'super' || client?.user?.admin === 'common';
 
     const sortChats = (items: XuanChat[]) => [...items]
         .filter((chat) => !chat.hide && !chat.freeze && !isProtectedDefaultChat(chat))
@@ -941,9 +942,13 @@ export default function XuanApp() {
         setLastLogin({server: result.session.server, account: result.session.account});
         setClient(result.client);
         setSession(result.session);
-        void loadWorkbenchStats(result.client);
+        if (result.client.user?.admin === 'super' || result.client.user?.admin === 'common') void loadWorkbenchStats(result.client);
         await loadChats(result.client);
     };
+
+    useEffect(() => {
+        if (!workbenchEnabled && activeTab === 'work') setActiveTab('message');
+    }, [workbenchEnabled, activeTab]);
 
     useEffect(() => {
         if (!client) return;
@@ -1082,6 +1087,10 @@ export default function XuanApp() {
         if (tab === 'message') {
             setActiveTab('message');
         } else if (tab === 'work') {
+            if (!workbenchEnabled) {
+                Alert.alert('无法进入工作台', '当前账号没有工作台权限');
+                return;
+            }
             setActiveTab('work');
             if (client) void loadWorkbenchStats(client);
         } else if (tab === 'contacts' && client) {
@@ -1221,7 +1230,7 @@ export default function XuanApp() {
         return <WorkbenchScreen
             stats={workbenchStats}
             openCustomerContact={() => setCustomerContactOpen(true)}
-            footer={<BottomNav active="work" unreadCount={unreadCount} contactsCount={1} onChange={changeTab} />}
+            footer={<BottomNav active="work" unreadCount={unreadCount} contactsCount={1} workbenchEnabled={workbenchEnabled} onChange={changeTab} />}
         />;
     }
     if (activeTab === 'contacts') {
@@ -1242,7 +1251,7 @@ export default function XuanApp() {
                     setActiveMember(member);
                 }
             }}
-            footer={<BottomNav active="contacts" unreadCount={unreadCount} onChange={changeTab} />}
+            footer={<BottomNav active="contacts" unreadCount={unreadCount} workbenchEnabled={workbenchEnabled} onChange={changeTab} />}
             deptStack={contactDeptStack}
             updateDeptStack={setContactDeptStack}
         />;
@@ -1276,6 +1285,7 @@ export default function XuanApp() {
         refreshing={refreshing}
         receiving={loadingChats || refreshing || reconnecting}
         unreadCount={unreadCount}
+        workbenchEnabled={workbenchEnabled}
         refresh={() => loadChats(client, true)}
         openChat={openChat}
         openSearch={() => {
@@ -1461,4 +1471,3 @@ const styles = StyleSheet.create({
     attachmentPageDot: {width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#d7d9dd'},
     attachmentPageDotActive: {backgroundColor: '#8d9095'},
 });
-
